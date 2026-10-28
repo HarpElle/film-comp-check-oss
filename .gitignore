@@ -1,0 +1,12 @@
+.cache/
+*.jsonl
+.env*
+node_modules
+.next/
+next-env.d.ts
+*.tsbuildinfo
+qa/
+test-results/
+playwright-report/
+.data/
+!.env.example

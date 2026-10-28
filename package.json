@@ -1,0 +1,32 @@
+{
+  "name": "qloo-comp-checker",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "qa": "next build && playwright test"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.39.0",
+    "@vercel/firewall": "^1.2.6",
+    "next": "^15.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.4"
+  }
+}

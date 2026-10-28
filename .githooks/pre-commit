@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+# Blocks a commit when the public scan finds a Qloo-derived value, key, forbidden path, image or C2PA data
+# in the staged files. Enable once per clone: git config core.hooksPath .githooks
+# Needs the private local cache (.cache/); without it the scan fails. A clone with no cache can run the
+# structural checks only with SCAN_SYNTHETIC=1 git commit ...
+set -e
+[ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ] || exit 0
+if ! out=$(SCAN_STAGED=1 npx vitest run --config scripts/vitest.scripts.config.ts scripts/scan-public.ts 2>&1); then
+  printf '%s\n' "$out" | grep -E '^(scan|note)|: (number|Qloo|secret|key pattern|path must|image|C2PA)|needs the private' >&2 || printf '%s\n' "$out" >&2
+  echo "pre-commit: public scan failed; commit blocked." >&2
+  exit 1
+fi
+printf '%s\n' "$out" | grep -E '^scan' || true

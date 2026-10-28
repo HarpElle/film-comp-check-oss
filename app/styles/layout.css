@@ -1,0 +1,114 @@
+/* Results-mode layout: frame, verdict, status lines, map, phones.
+   Every size and color is a token from tokens.css or an alias in globals.css. */
+
+/* WP-A header: 56 px, 2 px #333 rule, 28 px logo mark, wordmark, deck chip in mono 13. Nothing else but actions. */
+.appbar { height: 56px; display: flex; align-items: center; gap: var(--space-5); border-bottom: 2px solid var(--gray-900); }
+.appbar .brand img { height: 28px; width: auto; }
+.appbar .wordmark { font-family: var(--font-condensed); font-weight: var(--fw-semibold); font-size: var(--fs-20); line-height: 1; }
+.appbar .deckchip { font: var(--fw-regular) var(--fs-13)/1 var(--font-mono); color: var(--fg-2); white-space: nowrap; }
+.appbar .actions { display: flex; gap: var(--space-3); }
+
+/* Design tokens: gutters 24, 1232 content at 1280 (the max width is a design choice). */
+.page { max-width: calc(1232px + 2 * var(--gutter)); }
+
+/* WP-A top region: 330 px, verdict column + 344 px map, gap 48. Status lines pinned to the bottom of the left column. */
+main { padding-top: var(--space-6); }
+.top { display: grid; grid-template-columns: minmax(0, 1fr) 344px; gap: var(--space-8); min-height: 330px; align-items: stretch; margin-bottom: var(--space-6); }
+.top-left { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; gap: var(--space-5); }
+.sample-label { margin: 0 0 var(--space-3); font: var(--fw-regular) var(--fs-13)/var(--lh-snug) var(--font-sans); color: var(--fg-2); }
+
+/* WP-B verdict: Inter 20/1.4, lines 16 apart, 18 px icons with a 12 px gap; audience line weight 600. */
+.verdict { padding: 0; }
+.verdict-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-5); }
+.verdict-line { display: flex; gap: var(--space-4); align-items: flex-start; font: var(--fw-regular) var(--fs-20)/1.4 var(--font-sans); color: var(--fg-1); }
+.verdict-line.vl-audience { font-weight: var(--fw-semibold); }
+.verdict-line .v-text { min-width: 0; }
+.v-icon { flex: none; width: 22px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+.v-icon .icon, .v-icon .icon svg { width: 18px; height: 18px; }
+.v-matched { color: var(--blue-500); }
+.v-muted { color: var(--gray-600); } /* #767676: icon strokes on white */
+.v-chip { align-self: flex-start; width: 22px; height: 22px; margin-top: 3px; color: var(--gray-900); }
+.v-chip .icon, .v-chip .icon svg { width: 14px; height: 14px; }
+.v-chip-outlier { background: var(--orange-500); }
+.v-chip-split { border: 1.5px dashed var(--gray-900); }
+[data-testid="verdict-heading"]:focus { outline: none; }
+
+/* WP-F status lines: 1 px #D6D6D6 rule above, 13 px #6A6A6A, no fill. Line 1 = calls + stamp + action; line 2 = limits. */
+.status { border-top: 1px solid var(--gray-300); padding-top: var(--space-3); font: var(--fw-regular) var(--fs-13)/var(--lh-snug) var(--font-sans); color: var(--fg-2); }
+.status p { margin: 0 0 var(--space-2); }
+.status p:last-child { margin-bottom: 0; }
+.status .btn.link { font-size: var(--fs-13); }
+
+/* WP-E2 deck map. */
+.deckmap { margin: 0; width: 344px; }
+.deckmap-caption { display: block; margin: 0 0 var(--space-3); }
+.fcc-label { font: var(--fw-semibold) var(--fs-11)/1 var(--font-sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-2); }
+.deckmap svg { display: block; overflow: visible; }
+.map-frame { fill: none; stroke: var(--gray-300); stroke-width: 1; }
+.map-cross { stroke: var(--line-cross); stroke-width: 1; }
+.map-box { fill: none; stroke: var(--gray-900); stroke-width: 1; stroke-dasharray: 4 3; }
+.map-note { font: var(--fw-regular) var(--fs-11)/1 var(--font-sans); fill: var(--fg-2); }
+.map-dot { fill: var(--blue-500); }
+.map-outlier { fill: var(--orange-500); stroke: var(--gray-900); stroke-width: 1.5; }
+.map-ring { fill: none; stroke: var(--gray-900); stroke-width: 1; stroke-dasharray: 3 2; }
+.map-name { font-family: var(--font-condensed); font-weight: var(--fw-semibold); font-size: var(--fs-13); fill: var(--gray-900); }
+.map-flag { font-family: var(--font-sans); font-weight: var(--fw-semibold); font-size: var(--fs-11); fill: var(--gray-900); }
+.map-flag.outlier { fill: var(--orange-ink); }
+.map-halo { stroke: var(--white); stroke-width: 3px; stroke-linejoin: round; fill: var(--white); }
+.map-tick { font: var(--fw-regular) var(--fs-11)/1 var(--font-mono); fill: var(--fg-2); }
+.map-axis { font: var(--fw-regular) var(--fs-11)/1 var(--font-sans); fill: var(--fg-2); }
+.map-axis-name { font-weight: var(--fw-semibold); fill: var(--gray-900); }
+.map-not-plotted { margin: var(--space-2) 0 0; font-size: var(--fs-12); color: var(--fg-2); }
+.map-placeholder { border: 1px solid var(--gray-300); display: flex; align-items: center; justify-content: center; padding: var(--space-6); text-align: center; font-size: var(--fs-12); color: var(--fg-2); }
+
+.phone-order { display: none; }
+
+/* WP-K 720-1023: the map moves under the verdict, centered at 288 px wide. */
+@media (max-width: 1023px) and (min-width: 721px) {
+  .top { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); min-height: 0; }
+  .deckmap { justify-self: center; width: 288px; }
+  .deckmap svg { width: 288px; height: auto; }
+}
+/* WP-K 720-1023: the Rank column merges under Fit score (the column's own text, from the cell's data-rank, so the
+   score cell's text stays the score). Screen only: the printed sheet keeps its Rank column. */
+@media screen and (max-width: 1023px) and (min-width: 721px) {
+  table.results th.rank-th, table.results td.rank { display: none; }
+  table.results td[data-rank]::after { content: attr(data-rank); display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--fg-2); white-space: nowrap; }
+}
+
+/* WP-K: phones (<720). Verdict 16 px, map full width, flagged comps first (D7) unless "Deck order" is on. */
+@media (max-width: 720px) {
+  main { padding-top: var(--space-5); }
+  .top { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); min-height: 0; }
+  .verdict-line { font-size: var(--fs-16); }
+  .v-icon { height: 22px; }
+  .v-chip { margin-top: 0; }
+  .deckmap { width: 100%; max-width: 344px; }
+  .deckmap svg { width: 100%; height: auto; }
+  .appbar { gap: var(--space-3); }
+  .appbar .wordmark { font-size: var(--fs-16); white-space: nowrap; }
+  .appbar .brand img { height: 24px; }
+  .appbar .deckchip { display: none; }
+  .phone-order { display: flex; gap: var(--space-3); align-items: baseline; margin: 0 0 var(--space-3); font-size: var(--fs-12); color: var(--fg-2); }
+  table.results:not(.compact) tbody { display: flex; flex-direction: column; }
+  table.results:not(.compact):not(.deck-order) tbody > tr { order: var(--o, 0); }
+}
+@media (max-width: 420px) { .appbar .wordmark { font-size: var(--fs-14); } .appbar .actions { gap: var(--space-2); } }
+
+/* WP-C Remove/Undo: the removed comp collapses to a 28px row; the last result stays, muted, while it reruns. */
+table.results tr.comp.removed, table.results:not(.compact) tr.comp.removed { height: 28px; min-height: 0; padding-top: 0; padding-bottom: 0; margin-top: var(--space-2); box-sizing: border-box; }
+table.results tr.comp.removed td, table.results:not(.compact) tr.comp.removed td { height: 28px; padding-top: 0; padding-bottom: 0; line-height: 26px; color: var(--gray-600); font-size: 13px; }
+.results tr.removed s { text-decoration-thickness: 1px; }
+.results tr.removed .removed-tag { margin-left: var(--space-3); }
+.results.updating .fit-score, .results.updating .rank, .results.updating .flags-cell { color: var(--gray-600); }
+.updating-tag { color: var(--gray-600); font-size: 13px; }
+.deckmap.updating [data-testid="map-point"][data-flag="none"] { opacity: 0.4; }
+.removal-line { margin: 0; }
+.removal-line .btn.link { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+/* WP-G step/note links: 24 px hit areas; the followed target is marked blue-50 until the next click. */
+.link-hit { display: inline-flex; align-items: center; min-height: 24px; gap: var(--space-2); }
+.link-target { background: var(--blue-50); outline: none; }
+.steps-section > .btn.link { margin: 0 0 var(--space-3); }
+.menu-list .copy-note { margin: 0; padding: 0 var(--space-4); overflow-wrap: anywhere; }
+.menu-list .copy-note:empty { display: none; }

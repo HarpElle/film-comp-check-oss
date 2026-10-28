@@ -1,0 +1,33 @@
+/* Film Comp Check — component stylesheet. Loads after tokens.css. Values that live in tokens.json are not repeated here. */
+:root{
+--fw-regular:400;--fw-medium:500;--fw-semibold:600;--fw-bold:700;
+--fs-11:11px;--fs-12:12px;--fs-13:13px;--fs-14:14px;--fs-16:16px;--fs-17:17px;--fs-18:18px;--fs-20:20px;--fs-24:24px;--fs-30:30px;--fs-48:48px;
+--lh-tight:1.2;--lh-snug:1.35;--lh-body:1.5;
+--tracking-label:0.06em;--tracking-tight:-0.01em;
+--type-display:var(--fw-semibold) var(--fs-30)/var(--lh-tight) var(--font-sans);
+--type-h1:var(--fw-semibold) var(--fs-20)/var(--lh-tight) var(--font-sans);
+--type-h2:var(--fw-semibold) var(--fs-16)/var(--lh-snug) var(--font-sans);
+--type-body:var(--fw-regular) var(--fs-14)/var(--lh-body) var(--font-sans);
+--type-body-strong:var(--fw-semibold) var(--fs-14)/var(--lh-body) var(--font-sans);
+--type-small:var(--fw-regular) var(--fs-12)/var(--lh-snug) var(--font-sans);
+--type-label:var(--fw-semibold) var(--fs-11)/var(--lh-snug) var(--font-sans);
+--type-score:var(--fw-medium) var(--fs-14)/var(--lh-snug) var(--font-mono);
+--type-score-lg:var(--fw-medium) var(--fs-24)/var(--lh-tight) var(--font-mono);
+--type-log:var(--fw-regular) var(--fs-12)/var(--lh-body) var(--font-mono);
+--type-film-title:var(--fw-semibold) var(--fs-17)/var(--lh-tight) var(--font-condensed);
+--type-film-title-lg:var(--fw-semibold) var(--fs-24)/var(--lh-tight) var(--font-condensed);
+--type-wordmark:var(--fw-semibold) var(--fs-20)/var(--lh-tight) var(--font-condensed);
+--type-display-condensed:var(--fw-semibold) var(--fs-48)/1.1 var(--font-condensed);
+--rule-heavy:2px solid var(--border-strong);--rule-light:1px solid var(--border-1);
+--focus-outline:2px solid var(--focus-ring);
+--dur-fast:120ms;--dur-base:180ms;--ease:cubic-bezier(.2,0,0,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;background:var(--surface-page);color:var(--fg-1);font:var(--type-body);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--fg-link);text-decoration:underline;text-underline-offset:2px}
+a:hover{color:var(--blue-700)}
+:focus-visible{outline:var(--focus-outline);outline-offset:var(--focus-offset)}
+.fcc-num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.fcc-label{font:var(--type-label);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--fg-2)}
+@keyframes fcc-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:0s!important;transition-duration:0s!important}}
