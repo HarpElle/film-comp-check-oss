@@ -37,6 +37,15 @@ export interface StatusLinesProps {
   onRunLive: () => void;
   pausedLive: boolean;
   repeat: string | null;
+  /** Opens the step log at the first chosen step (UX audit WP-6, 2.2). */
+  onSteps?: () => void;
+}
+
+/** The stamp with its "… chose N of M steps" phrase as a link button to the step log; the text is unchanged. */
+function StampText({ stamp, onSteps }: { stamp: string; onSteps?: () => void }) {
+  const m = onSteps ? stamp.match(/^(.* \u00b7 )([^\u00b7]+ chose \d+ of \d+ steps)(.*)$/) : null;
+  if (!m) return <>{stamp}</>;
+  return <>{m[1]}<button type="button" className="btn link stamp-steps" data-testid="stamp-steps" aria-controls="steps-panel" onClick={onSteps}>{m[2]}</button>{m[3]}</>;
 }
 
 /** WP-F status lines: the change summary, the live line, line 1 (calls and stamp), current-state lines, line 2. */
@@ -47,13 +56,13 @@ export function StatusLines(p: StatusLinesProps) {
   const stamp = recordedStamp(shown, { steps: !p.tooFew && !busy, date: !p.removedNow });
   const quiet = !!p.sampleId && !busy && !p.liveGateOpen;
   return (
-    <div className="status" data-testid="status-lines" role="status" aria-live="polite">
+    <div className="status" data-testid="status-lines">
       {p.removal && p.removalLine && <RemovalStatus line={p.removalLine} title={p.removal.title} canUndo={p.canUndo} onUndo={p.onUndo} />}
       {busy && <div data-testid="busy">{p.liveLine}</div>}
       {stamp
-        ? <p className="muted"><span data-testid="calls">No new Qloo calls.</span> <span data-testid="recorded-stamp">{stamp}.</span>
+        ? <p className="muted"><span data-testid="calls">No new Qloo calls.</span> <span data-testid="recorded-stamp"><StampText stamp={stamp} onSteps={busy ? undefined : p.onSteps} />.</span>
           {/* Only one of the replay "Run again" link and the quiet line renders (the quiet line already says "Run again"). */}
-          {!quiet && <>{" "}<button className="btn link run-live no-print" data-testid="replay-again" disabled={busy || !p.hasResult} onClick={p.onRunAgain} title="Runs the agent again on the recorded Qloo results; no live Qloo call">Run again</button></>}
+          {!quiet && <>{" "}<button className="btn link run-live no-print" data-testid="replay-again" disabled={busy || !p.hasResult} onClick={p.onRunAgain}>Run again</button></>}
           {p.sampleId && !busy && (quiet
             ? <>{" "}<span data-testid="sample-quiet-line">{SAMPLE_QUIET}</span></>
             : <>{" "}<button className="btn link no-print" data-testid="run-live-qloo" disabled={busy} onClick={p.onRunLive} title="Runs this sample with live Qloo calls and compares the fit scores with the recording">Run live on Qloo</button></>)}</p>
@@ -69,7 +78,7 @@ export function StatusLines(p: StatusLinesProps) {
 /** Cold run: the status lines stand where the finished ones will (WP-F: line 2 always), line 1 live with Stop. */
 export function ColdStatusLines({ liveLine }: { liveLine: ReactNode }) {
   return (
-    <div className="status" data-testid="status-lines" role="status" aria-live="polite">
+    <div className="status" data-testid="status-lines">
       <div data-testid="busy">{liveLine}</div>
       <p className="status-line-2" data-testid="limits-footer">{COPY.limits}</p>
     </div>

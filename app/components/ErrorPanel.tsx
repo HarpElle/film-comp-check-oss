@@ -1,12 +1,12 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { CHECK_FAILED, several, unmatched, type ErrorAction, type ErrorView } from "@/lib/error-state";
 import type { CompResult, MatchOption } from "@/lib/types";
 import { Icon, type IconName } from "./Icon";
 
 const LABEL: Record<ErrorAction, { text: string; icon: IconName }> = {
   retry: { text: "Try again", icon: "refresh" },
-  sample: { text: "Open a sample deck", icon: "play" },
-  edit: { text: "Edit list", icon: "pencil" },
+  sample: { text: "Pennywell sample", icon: "play" },
+  edit: { text: "Edit comps", icon: "pencil" },
   add: { text: "Add comps", icon: "pencil" },
   "agent-again": { text: "Run the agent again", icon: "refresh" },
   "new-check": { text: "Run a new check", icon: "play" },
@@ -17,13 +17,16 @@ const LABEL: Record<ErrorAction, { text: string; icon: IconName }> = {
  * what failed, the server's own sentence (testid error-detail; not on the Qloo card, whose body already says it),
  * and `extra` (the other sample, if any).
  */
-export function RunErrorPanel({ view, detail, on, extra }: { view: ErrorView; detail?: string; on: (a: ErrorAction) => void; extra?: ReactNode }) {
+export function RunErrorPanel({ view, detail, on, extra, pageHeading }: { view: ErrorView; detail?: string; on: (a: ErrorAction) => void; extra?: ReactNode; pageHeading?: boolean }) {
+  // UX audit WP-10 (8.6): with no result on the page, the headline is the page's h1 and takes focus.
+  const h1 = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { if (pageHeading) h1.current?.focus(); }, [pageHeading, view.headline]);
   return (
     <div className="error-state" data-testid="error-state" data-kind={view.kind} role="alert">
       <p className="check-failed" data-testid="check-failed"><Icon name="warn" />{CHECK_FAILED}</p>
-      <h2 data-testid="error-headline">{view.headline}</h2>
+      {pageHeading ? <h1 ref={h1} tabIndex={-1} data-testid="error-headline">{view.headline}</h1> : <h2 data-testid="error-headline">{view.headline}</h2>}
       <p data-testid="error-body">{view.body}</p>
-      {detail && detail !== CHECK_FAILED && view.kind !== "qloo" && <p className="small muted" data-testid="error-detail">{detail}</p>}
+      {detail && detail !== CHECK_FAILED && !["qloo", "limit", "offline"].includes(view.kind) && <p className="small muted" data-testid="error-detail">{detail}</p>}
       <div className="error-actions">
         {view.actions.map((a, i) => (
           <button key={a} className={`btn${i === 0 ? " primary" : ""}${a === "sample" ? " sample" : ""}`} data-testid={a === "sample" ? "error-sample" : `error-${a}`} onClick={() => on(a)}>
@@ -62,7 +65,7 @@ export function AgentDownNotice({ view, onAgain, disabled }: { view: ErrorView; 
 }
 
 /**
- * Error copy items 3 and 4, one panel per comp under the verdict: "We couldn't match" with Edit list, and
+ * Error copy items 3 and 4, one panel per comp under the verdict: "We couldn't match" with Edit comps, and
  * "matches more than one title" with each record (title, year, type) as a button that puts that year on the comp's line.
  */
 export function MatchPanels({ comps, onEdit, onPick }: { comps: CompResult[]; onEdit: () => void; onPick: (index: number, o: MatchOption) => void }) {

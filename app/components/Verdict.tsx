@@ -22,19 +22,23 @@ function monoNumbers(l: string): ReactNode[] {
   return l.split(/(\d+\.\d+)/).map((part, i) => (i % 2 ? <span key={i} className="fcc-num">{part}</span> : part));
 }
 
-export function VerdictIcon({ kind, line, audience }: { kind: LineKind; line: string; audience: AudienceKind }) {
-  if (kind === "matched") return <span className="v-icon v-matched" data-icon-kind="check"><Icon name="check" size={18} /></span>;
+export function VerdictIcon({ kind, line, audience, size = 18 }: { kind: LineKind; line: string; audience: AudienceKind; size?: number }) {
+  const chip = Math.round(size * 14 / 18);
+  if (kind === "matched") return <span className="v-icon v-matched" data-icon-kind="check"><Icon name="check" size={size} /></span>;
   if (kind === "audience") {
-    if (audience === "outlier") return <span className="v-icon v-chip v-chip-outlier" data-icon-kind="outlier-chip"><Icon name="users" size={14} /></span>;
-    if (audience === "split") return <span className="v-icon v-chip v-chip-split" data-icon-kind="split-chip"><Icon name="split" size={14} /></span>;
-    return <span className="v-icon v-muted" data-icon-kind="users"><Icon name="users" size={18} /></span>;
+    if (audience === "outlier") return <span className="v-icon v-chip v-chip-outlier" data-icon-kind="outlier-chip"><Icon name="users" size={chip} /></span>;
+    if (audience === "split") return <span className="v-icon v-chip v-chip-split" data-icon-kind="split-chip"><Icon name="split" size={chip} /></span>;
+    return <span className="v-icon v-muted" data-icon-kind="users"><Icon name="users" size={size} /></span>;
   }
   if (kind === "fit") {
     const cut = /Consider cutting/.test(line);
-    return <span className="v-icon v-muted" data-icon-kind={cut ? "scissors" : "circle-help"}><Icon name={cut ? "scissors" : "circleHelp"} size={18} /></span>;
+    return <span className="v-icon v-muted" data-icon-kind={cut ? "scissors" : "circle-help"}><Icon name={cut ? "scissors" : "circleHelp"} size={size} /></span>;
   }
-  return <span className="v-icon v-muted" data-icon-kind="dot"><Icon name="dot" size={18} /></span>;
+  return <span className="v-icon v-muted" data-icon-kind="dot"><Icon name="dot" size={size} /></span>;
 }
+
+/** The audience kind a verdict line itself names (the landing has the lines, not the comps). */
+export const audienceOfLine = (l: string): AudienceKind => (l.startsWith("Audience outlier") ? "outlier" : l.startsWith("Audience split") ? "split" : "none");
 
 export function VerdictLines({ lines, r, countLine }: { lines: string[]; r: CheckResult; countLine: string }) {
   const aud = audienceKind(r);

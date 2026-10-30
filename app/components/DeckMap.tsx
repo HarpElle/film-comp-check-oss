@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { SKEW_THRESHOLD } from "@/lib/skew";
 import type { CheckResult } from "@/lib/types";
 import { MAP } from "./mapGeometry";
+import { MAP_COPY } from "@/lib/copy";
 
 /**
  * DeckMap. Inline SVG 344x314; plot square 288x288 at (48, 4); both axes -1..1 at
@@ -23,6 +24,16 @@ const NAME_H = 13, TAG_H = 11, LINE_GAP = 2, PAD = 4;
 const markerHalf = (p: Pt) => (p.flag === "outlier" ? 6.75 : p.flag === "split" ? 9.75 : 5);
 /** Width estimates (wide on purpose) until the real fonts are measured in the browser. */
 const estimate = (t: string, kind: "name" | "tag") => Math.ceil(t.length * (kind === "name" ? 6.6 : 6.4));
+/** Map label text: the title cut to 18 characters + "…" (the full title stays in <title> and the aria-label; WP-8, 14.1). */
+export const shortTitle = (t: string) => (t.length > 18 ? `${t.slice(0, 18).trimEnd()}\u2026` : t);
+/** More flagged points than this: no labels at rest (hover or focus still labels one). */
+const MAX_REST_LABELS = 4;
+
+/** The hidden sentence a row's toggle points to (aria-describedby; WP-8, 8.8), in the map's own words. */
+export function pointSentence(c: CheckResult["comps"][number], m: CheckResult["deckMean"]): string | undefined {
+  if (!m || typeof c.skew?.age !== "number" || typeof c.skew?.female !== "number" || c.match.badge !== "Matched") return undefined;
+  return `On the audience map: sits ${c.skew.age >= m.age ? "above" : "below"} the deck average, ${c.skew.female >= m.female ? "more female" : "more male"}.`;
+}
 
 export interface Placed { key: string; side: "right" | "left" | "above" | "below"; box: Box; anchor: "start" | "end" | "middle"; tx: number }
 const hit = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -52,7 +63,7 @@ const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eig
 const word = (n: number) => WORDS[n] ?? String(n);
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
-export function DeckMap({ r, updating = false }: { r: CheckResult; updating?: boolean }) {
+export function DeckMap({ r, updating = false, hoverKey = null, onHover }: { r: CheckResult; updating?: boolean; hoverKey?: string | null; onHover?: (key: string | null) => void }) {
   const m = r.deckMean;
   const [measured, setMeasured] = useState<Record<string, number>>({});
   const all: (Pt & { f: number; a: number })[] = [];
@@ -61,16 +72,19 @@ export function DeckMap({ r, updating = false }: { r: CheckResult; updating?: bo
     all.push({ key: c.key, title: c.match.matchedTitle ?? c.match.input.title, f: c.skew.female, a: c.skew.age, x: px(c.skew.female), y: py(c.skew.age), flag: c.skewFlag ? "outlier" : c.skewSplit ? "split" : undefined });
   }
   const flagged = all.filter((p) => p.flag);
-  const sig = flagged.map((p) => p.title).join("|");
+  // Labeled points: the flagged ones (unless there are too many), plus the one a row or pointer is on.
+  const hovered = hoverKey ? all.find((p) => p.key === hoverKey) : undefined;
+  const labeled = [...(flagged.length > MAX_REST_LABELS ? [] : flagged), ...(hovered && !(flagged.length <= MAX_REST_LABELS && hovered.flag) ? [hovered] : [])];
+  const sig = labeled.map((p) => `${p.key}:${p.title}`).join("|");
   // Measure the real label widths once the self-hosted fonts are ready, then place again.
   useEffect(() => {
     let live = true;
     const run = () => {
       const ctx = document.createElement("canvas").getContext("2d"); if (!ctx) return;
       const res: Record<string, number> = {};
-      for (const p of flagged) {
-        ctx.font = `600 13px "IBM Plex Sans Condensed"`; const n = ctx.measureText(p.title).width;
-        ctx.font = `600 11px "Inter"`; const t = ctx.measureText(FLAG_WORD[p.flag!]).width;
+      for (const p of labeled) {
+        ctx.font = `600 13px "IBM Plex Sans Condensed"`; const n = ctx.measureText(shortTitle(p.title)).width;
+        ctx.font = `600 11px "Inter"`; const t = p.flag ? ctx.measureText(FLAG_WORD[p.flag]).width : 0;
         res[p.key] = Math.ceil(Math.max(n, t)) + 2;
       }
       if (live) setMeasured(res);
@@ -86,10 +100,12 @@ export function DeckMap({ r, updating = false }: { r: CheckResult; updating?: bo
   const thr = String(SKEW_THRESHOLD);
   const avgLabel: Box = { x: L + P - 4 - 66, y: cy - 4 - 10, w: 66, h: 11 };
   const pmLabel: Box = { x: box.x + box.w + 3, y: box.y + box.h + 1, w: 30, h: 11 };
-  const width = (p: Pt) => measured[p.key] ?? Math.max(estimate(p.title, "name"), estimate(FLAG_WORD[p.flag!], "tag"));
+  const width = (p: Pt) => measured[p.key] ?? Math.max(estimate(shortTitle(p.title), "name"), p.flag ? estimate(FLAG_WORD[p.flag], "tag") : 0);
   // The box edges count as marks to avoid (WP-E2 "avoid other marks"); 1 px strips along each side.
   const edges: Box[] = m ? [{ ...box, h: 1 }, { ...box, y: box.y + box.h - 1, h: 1 }, { ...box, w: 1 }, { ...box, x: box.x + box.w - 1, w: 1 }] : [];
-  const placed = new Map(placeLabels(flagged, all, { x: L, y: T, w: P, h: P }, m ? [avgLabel, pmLabel, ...edges] : [], width).map((q) => [q.key, q]));
+  // Clip each label inside the SVG (WP-8, 14.1): shift the box and its text anchor together.
+  const clip = (q: Placed): Placed => { const dx = q.box.x < 0 ? -q.box.x : q.box.x + q.box.w > W ? W - q.box.x - q.box.w : 0; return dx ? { ...q, box: { ...q.box, x: q.box.x + dx }, tx: q.tx + dx } : q; };
+  const placed = new Map(placeLabels(labeled, all, { x: L, y: T, w: P, h: P }, m ? [avgLabel, pmLabel, ...edges] : [], width).map((q) => [q.key, clip(q)]));
 
   const outside = all.filter((p) => p.flag);
   const where = (p: (typeof all)[number]) => {
@@ -120,22 +136,26 @@ export function DeckMap({ r, updating = false }: { r: CheckResult; updating?: bo
         {all.map((p) => {
           const q = placed.get(p.key);
           return (
-            <g key={p.key} data-testid="map-point" data-cx={p.x} data-cy={p.y} data-title={p.title} data-flag={p.flag ?? "none"} data-side={q?.side}>
+            <g key={p.key} data-testid="map-point" data-key={p.key} data-cx={p.x} data-cy={p.y} data-title={p.title} data-flag={p.flag ?? "none"} data-side={q?.side} data-hover={p.key === hoverKey ? "yes" : undefined}
+              onPointerEnter={onHover && (() => onHover(p.key))} onPointerLeave={onHover && (() => onHover(null))}>
               <title>{p.title}{p.flag ? `: ${FLAG_WORD[p.flag].toLowerCase()}` : ""}</title>
               {p.flag === "outlier" ? (
-                <rect data-testid="map-marker" data-shape="square" x={p.x - 6} y={p.y - 6} width={12} height={12} className="map-outlier" />
+                <rect data-testid="map-marker" data-shape="square" x={p.x - 6} y={p.y - 6} width={12} height={12} className="map-outlier map-mark" />
               ) : (
                 <>
-                  <circle data-testid="map-marker" data-shape="dot" cx={p.x} cy={p.y} r={5} className="map-dot" />
+                  <circle data-testid="map-marker" data-shape="dot" cx={p.x} cy={p.y} r={5} className="map-dot map-mark" />
                   {p.flag === "split" && <circle data-testid="map-ring" cx={p.x} cy={p.y} r={9} className="map-ring" />}
                 </>
               )}
+              {p.key === hoverKey && <circle data-testid="map-hover-ring" cx={p.x} cy={p.y} r={9} className="map-hover-ring" />}
               {q && (
                 <g data-testid="map-label-group">
-                  <text className="map-name map-halo" aria-hidden="true" x={q.tx} y={q.box.y + NAME_H - 2} textAnchor={q.anchor}>{p.title}</text>
-                  <text className="map-name" x={q.tx} y={q.box.y + NAME_H - 2} textAnchor={q.anchor} data-testid="map-label">{p.title}</text>
-                  <text className={`map-flag map-halo`} aria-hidden="true" x={q.tx} y={q.box.y + NAME_H + LINE_GAP + TAG_H - 2} textAnchor={q.anchor}>{FLAG_WORD[p.flag!]}</text>
-                  <text className={`map-flag ${p.flag}`} x={q.tx} y={q.box.y + NAME_H + LINE_GAP + TAG_H - 2} textAnchor={q.anchor} data-testid="map-flag">{FLAG_WORD[p.flag!]}</text>
+                  <text className="map-name map-halo" aria-hidden="true" x={q.tx} y={q.box.y + NAME_H - 2} textAnchor={q.anchor}>{shortTitle(p.title)}</text>
+                  <text className="map-name" x={q.tx} y={q.box.y + NAME_H - 2} textAnchor={q.anchor} data-testid="map-label">{shortTitle(p.title)}</text>
+                  {p.flag && <>
+                    <text className={`map-flag map-halo`} aria-hidden="true" x={q.tx} y={q.box.y + NAME_H + LINE_GAP + TAG_H - 2} textAnchor={q.anchor}>{FLAG_WORD[p.flag]}</text>
+                    <text className={`map-flag ${p.flag}`} x={q.tx} y={q.box.y + NAME_H + LINE_GAP + TAG_H - 2} textAnchor={q.anchor} data-testid="map-flag">{FLAG_WORD[p.flag]}</text>
+                  </>}
                 </g>
               )}
             </g>
@@ -143,6 +163,7 @@ export function DeckMap({ r, updating = false }: { r: CheckResult; updating?: bo
         })}
         <Axes />
       </svg>
+      <p className="map-key small muted" data-testid="map-key">{MAP_COPY.box}</p>
       {!!r.audience?.unavailable.length && <p className="map-not-plotted" data-testid="map-not-plotted">Not plotted: {r.audience.unavailable.join(", ")} (no estimate)</p>}
     </figure>
   );
@@ -175,6 +196,7 @@ export function DeckMapSkeleton({ note }: { note: string }) {
         <rect x={c - half} y={py(0) - half} width={2 * half} height={2 * half} className="map-box" data-testid="map-skeleton-box" />
         <Axes />
       </svg>
+      <p className="map-key small muted" aria-hidden="true">{MAP_COPY.box}</p>
       <p className="sr-only">{note}</p>
     </figure>
   );

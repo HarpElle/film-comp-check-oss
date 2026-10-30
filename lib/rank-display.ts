@@ -45,8 +45,9 @@ export function withShownGaps(r: CheckResult): CheckResult {
   const deckGap = cutGap && typeof r.cutGap === "number" && r.cutGap.toFixed(3) === cutGap.exact ? cutGap : undefined;
   const fix = (s: string, g?: { exact: string; shown: string }) => {
     if (!g || g.exact === g.shown) return s;
-    // The exact gap where it is quoted as a gap: "X below the next comp", "Gap X", "gap X to the next comp", "gap to next X".
-    return s.replace(new RegExp(`${esc(g.exact)}(?= below the next comp)|(\\bgap\\b(?: to next)?:?\\s+)${esc(g.exact)}(?!\\d)`, "gi"), (_m, pre?: string) => `${pre ?? ""}${g.shown}`);
+    // The exact gap where it is quoted as a gap: "X below the next comp", "Gap X", "gap X to the next comp", "gap to next X",
+    // and "trails … by X" (the agent's stop line).
+    return s.replace(new RegExp(`${esc(g.exact)}(?= below the next comp)|(\\bgap\\b(?: to next)?:?\\s+|\\btrails\\b[^.]*?\\bby\\s+)${esc(g.exact)}(?!\\d)`, "gi"), (_m, pre?: string) => `${pre ?? ""}${g.shown}`);
   };
   const comps = r.comps.map((c) => {
     const g = gaps.get(c.key), extra = c === cut ? deckGap : undefined;

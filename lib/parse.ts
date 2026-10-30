@@ -4,10 +4,13 @@ import type { CompInput } from "./types";
  * One comp per line: "Title | Year | Director", "Title (Year)", "Title (Year) | Director", or the same fields
  * tab-separated (pasted from a spreadsheet). Year and director are optional; a trailing "(YYYY)" becomes the year.
  */
+/** A pasted list marker ("• ", "- ", "1. ", "2) "), stripped before a line is read (UX audit WP-12, 10.1). */
+const BULLET = /^\s*(?:[\u2022\u00b7\u25aa\u25e6*\-\u2013\u2014]|\d{1,2}[.)])\s+/;
+
 export function parseCompLines(text: string): CompInput[] {
   return text
     .split(/\r?\n/)
-    .map((l) => l.trim())
+    .map((l) => l.replace(BULLET, "").trim())
     .filter(Boolean)
     .map((l) => {
       const parts = l.split(/\||\t/).map((s) => s.trim());

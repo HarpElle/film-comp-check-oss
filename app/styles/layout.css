@@ -64,20 +64,30 @@ main { padding-top: var(--space-6); }
 .phone-order { display: none; }
 
 /* WP-K 720-1023: the map moves under the verdict, centered at 288 px wide. */
-@media (max-width: 1023px) and (min-width: 721px) {
+@media screen and (max-width: 1023px) and (min-width: 721px) {
   .top { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); min-height: 0; }
   .deckmap { justify-self: center; width: 288px; }
   .deckmap svg { width: 288px; height: auto; }
 }
-/* WP-K 720-1023: the Rank column merges under Fit score (the column's own text, from the cell's data-rank, so the
-   score cell's text stays the score). Screen only: the printed sheet keeps its Rank column. */
-@media screen and (max-width: 1023px) and (min-width: 721px) {
+/* UX audit WP-2 (was WP-K 720-1023 only): on screen the Rank column merges under the fit score at every width (the
+   column's own text, from the cell's data-rank, so the score cell's text stays the score). The printed sheet keeps its
+   Rank column. Tablets show Remove as an icon with a 44 px hit area. */
+@media screen {
   table.results th.rank-th, table.results td.rank { display: none; }
-  table.results td[data-rank]::after { content: attr(data-rank); display: block; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--fg-2); white-space: nowrap; }
+  table.results td[data-rank]::after { content: attr(data-rank); display: block; font: var(--fw-regular) var(--fs-12)/var(--lh-snug) var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg-2); white-space: nowrap; }
 }
+@media print { .fit-rank-th { display: none; } .flag-why { display: none; } } /* one page: reasons stay on screen and in the exports */
+@media screen and (max-width: 1023px) and (min-width: 721px) {
+  .rm { width: 44px; height: 44px; padding: 0; }
+  .rm .rm-lbl { display: none; }
+}
+.sample-verdict .v-icon { width: 18px; height: 20px; }
+.sample-verdict .v-icon .icon, .sample-verdict .v-icon .icon svg { width: 14px; height: 14px; }
+.sample-verdict .v-chip { width: 18px; height: 18px; margin-top: 1px; }
+.sample-verdict .v-chip .icon, .sample-verdict .v-chip .icon svg { width: 11px; height: 11px; }
 
 /* WP-K: phones (<720). Verdict 16 px, map full width, flagged comps first (D7) unless "Deck order" is on. */
-@media (max-width: 720px) {
+@media screen and (max-width: 720px) {
   main { padding-top: var(--space-5); }
   .top { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); min-height: 0; }
   .verdict-line { font-size: var(--fs-16); }
@@ -93,15 +103,15 @@ main { padding-top: var(--space-6); }
   table.results:not(.compact) tbody { display: flex; flex-direction: column; }
   table.results:not(.compact):not(.deck-order) tbody > tr { order: var(--o, 0); }
 }
-@media (max-width: 420px) { .appbar .wordmark { font-size: var(--fs-14); } .appbar .actions { gap: var(--space-2); } }
+@media screen and (max-width: 420px) { .appbar .wordmark { font-size: var(--fs-14); } .appbar .actions { gap: var(--space-2); } }
 
 /* WP-C Remove/Undo: the removed comp collapses to a 28px row; the last result stays, muted, while it reruns. */
 table.results tr.comp.removed, table.results:not(.compact) tr.comp.removed { height: 28px; min-height: 0; padding-top: 0; padding-bottom: 0; margin-top: var(--space-2); box-sizing: border-box; }
-table.results tr.comp.removed td, table.results:not(.compact) tr.comp.removed td { height: 28px; padding-top: 0; padding-bottom: 0; line-height: 26px; color: var(--gray-600); font-size: 13px; }
+table.results tr.comp.removed td, table.results:not(.compact) tr.comp.removed td { height: 28px; padding-top: 0; padding-bottom: 0; line-height: 26px; color: var(--fg-2); font-size: var(--fs-13); }
 .results tr.removed s { text-decoration-thickness: 1px; }
 .results tr.removed .removed-tag { margin-left: var(--space-3); }
-.results.updating .fit-score, .results.updating .rank, .results.updating .flags-cell { color: var(--gray-600); }
-.updating-tag { color: var(--gray-600); font-size: 13px; }
+.results.updating .fit-score, .results.updating .rank, .results.updating .flags-cell { color: var(--fg-2); } /* fg-2: 4.83:1 on the gray-100 tint (WP-10) */
+.updating-tag { color: var(--fg-2); font-size: var(--fs-13); }
 .deckmap.updating [data-testid="map-point"][data-flag="none"] { opacity: 0.4; }
 .removal-line { margin: 0; }
 .removal-line .btn.link { display: inline-flex; align-items: center; gap: var(--space-2); }
@@ -112,3 +122,134 @@ table.results tr.comp.removed td, table.results:not(.compact) tr.comp.removed td
 .steps-section > .btn.link { margin: 0 0 var(--space-3); }
 .menu-list .copy-note { margin: 0; padding: 0 var(--space-4); overflow-wrap: anywhere; }
 .menu-list .copy-note:empty { display: none; }
+
+/* UX audit WP-1: the printed sheet fits one letter page. Width queries above are screen-only, so print keeps the
+   desktop grid; these tighten the top region and rows. */
+@media print {
+  .top { min-height: 0; margin-bottom: var(--space-4); }
+  .top-left { justify-content: flex-start; }
+  .verdict-line { font-size: var(--fs-14); }
+  .verdict-lines { gap: var(--space-3); }
+  .v-icon { height: 20px; }
+  .status { font-size: var(--fs-11); }
+  .rank { white-space: nowrap; font-size: var(--fs-11); }
+  tr.comp { height: 32px; }
+  .sample-label { display: none; } /* the print head carries it (4.3) */
+}
+
+/* UX audit WP-4: at 320 (and 1280 at 400% zoom) the results header fits without sideways scroll. The logo and the
+   brand link's aria-label carry the name; the landing header (no actions) keeps its wordmark. */
+@media screen and (max-width: 360px) { .appbar.with-actions .wordmark { display: none; } }
+
+/* UX audit WP-5: the change after a Remove. The summary reads as the line that matters; "was" lines sit under the new
+   values; changed cells wash blue-100 once. */
+.removal-line [data-testid="change-summary-text"] { font: var(--type-body-strong); color: var(--fg-1); }
+.was { display: block; font: var(--type-small); color: var(--fg-2); }
+.was.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+@keyframes changed { from { background: var(--blue-100); } to { background: transparent; } }
+.changed { animation: changed 1200ms var(--ease) 1; }
+@media (prefers-reduced-motion: reduce) { .changed { animation: none; } }
+
+/* UX audit WP-9 (6.2): phones get rule-separated rows under a heavy rule, not boxed cards.
+   Row 1 chevron + title + year (Remove at the right, 44 px); row 2 director; row 3 flag pills + reason; row 4 one
+   wrapping line: score, rank text, MatchBadge. No cell labels. Order, outlier bar, close-call tint, split outline kept. */
+@media screen and (max-width: 720px) {
+  table.results:not(.compact) { border-top: var(--rule-heavy); }
+  table.results:not(.compact) tr.comp { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: var(--space-3); border: 0; border-bottom: 1px solid var(--border-2); border-radius: var(--radius-0); margin-top: 0; padding: var(--space-2) 0 6px var(--space-4); }
+  table.results:not(.compact) tr.comp > td { width: auto; padding: 0; }
+  table.results:not(.compact) tr.comp > td:first-child { order: 1; width: 100%; }
+  table.results:not(.compact) tr.comp > td.flags-td { order: 2; width: 100%; }
+  table.results:not(.compact) tr.comp > td.n { order: 3; text-align: left; }
+  table.results:not(.compact) tr.comp > td[data-label="Qloo match"] { order: 4; }
+  table.results:not(.compact) tr.comp td[data-label]::before { display: none; }
+  table.results:not(.compact) td[data-rank]::after { display: inline; margin-left: var(--space-3); }
+  table.results:not(.compact) .was { display: inline; margin-left: var(--space-3); }
+  table.results:not(.compact) .match-cell { flex-direction: row; flex-wrap: wrap; gap: var(--space-3); align-items: baseline; }
+  table.results:not(.compact) .flags-cell { padding: 0 0 var(--space-2); }
+  table.results:not(.compact) tr.comp .comp-cell { padding-right: 112px; }
+  table.results:not(.compact) .comp-sub { margin-top: -10px; } /* the title's 44 px tap area runs under the director line */
+  table.results:not(.compact) tr.comp td.rm-td { top: 0; right: 0; }
+  table.results:not(.compact) tr.detail:not([hidden]) > td { border: 0; border-bottom: 1px solid var(--border-2); border-radius: var(--radius-0); padding: var(--space-3) 0 var(--space-4) var(--space-4); }
+  table.results:not(.compact) tr.comp.removed { padding: 0 var(--space-4); border-bottom: 1px solid var(--border-2); }
+}
+/* UX audit WP-9 (6.4): at 721-1023 the status block and the map sit side by side under the verdict. */
+@media screen and (max-width: 1023px) and (min-width: 721px) {
+  .top { grid-template-columns: minmax(0, 1fr) 288px; column-gap: var(--space-6); row-gap: var(--space-5); align-items: start; }
+  .top-left { display: contents; }
+  .top-left > .top-lead { grid-column: 1 / -1; grid-row: 1; }
+  .top-left > :not(.top-lead) { grid-column: 1; grid-row: 2; }
+  .top > :last-child:not(.top-left) { grid-column: 2; grid-row: 2; }
+}
+
+/* UX audit WP-6: "How these numbers are made", closed on screen, open on the printed sheet. */
+.how-numbers { margin: 0 0 var(--space-5); max-width: 90ch; font: var(--type-small); color: var(--fg-2); }
+.how-numbers > summary { font-weight: var(--fw-semibold); cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: var(--space-2); min-height: 24px; }
+.how-numbers > summary::-webkit-details-marker { display: none; }
+.how-numbers[open] > summary .icon { transform: rotate(90deg); }
+.how-numbers ul { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
+.stamp-steps { font: inherit; }
+@media print { .was { display: none; } .how-numbers > summary .icon { display: none; } .how-numbers::details-content { content-visibility: visible; display: block; } }
+
+/* UX audit WP-11: shared-deck and stopped lines by the box; the landing aside's reserved room before the status loads. */
+.shared-line { margin: var(--space-2) 0 0; color: var(--fg-1); }
+.stopped-line { margin: var(--space-2) 0 0; }
+.stopped-line:empty { display: none; }
+.sample-reserve { min-height: 220px; }
+@media print {
+  .appbar { height: 40px; }
+  main { padding-top: var(--space-3); }
+  .how-numbers, .legend-note, .removal-line [data-testid="change-summary-text"] { font-size: var(--fs-11); }
+  .how-numbers { margin-bottom: 0; }
+  .how-numbers ul { margin: var(--space-1) 0 0; padding: 0; } /* one run-on paragraph on paper */
+  .how-numbers li { display: inline; }
+  .how-numbers li + li::before { content: " "; }
+}
+.live-checks { margin: var(--space-2) 0 0; }
+
+/* UX audit WP-7 (5.5): DS StepLog. 12 px Plex Mono rows on a 24 / 104 / rest grid with a light rule; the number is
+   zero-padded (data-npad), the tag is blue 600 for a model choice and muted otherwise; the result gets its own "→" line. */
+ol.steps { list-style: none; padding: 0; margin: 0; max-width: 96ch; font: var(--type-log); }
+ol.steps > li { display: grid; grid-template-columns: 24px 104px minmax(0, 1fr); column-gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-2); align-items: baseline; }
+ol.steps > li::before { content: attr(data-npad); color: var(--fg-2); font-variant-numeric: tabular-nums; }
+ol.steps code { font: inherit; }
+ol.steps .origin { display: inline; border: 0; padding: 0; margin: 0; font: var(--fw-regular) var(--fs-12)/var(--lh-body) var(--font-mono); letter-spacing: 0; color: var(--fg-2); }
+ol.steps .origin-model { font-weight: var(--fw-semibold); color: var(--blue-500); }
+ol.steps .step-body { min-width: 0; overflow-wrap: anywhere; }
+ol.steps .muted { color: var(--fg-1); }
+ol.steps .step-out { display: block; color: var(--fg-2); }
+ol.steps .step-out::before { content: "\2192 "; }
+ol.steps .details { font: inherit; }
+.steps-section .btn.link[data-testid="steps-toggle"], details.always-run > summary { font: var(--fw-semibold) var(--fs-12)/24px var(--font-mono); }
+details.always-run > summary { list-style: none; display: inline-flex; align-items: center; gap: var(--space-2); }
+details.always-run > summary::-webkit-details-marker { display: none; }
+details.always-run[open] > summary .icon { transform: rotate(90deg); }
+
+/* UX audit WP-7 (11.5): the loader spins (the one looping animation); skeleton bars keep their pulse. */
+.loading-line .icon, .live-status .icon { animation: fcc-spin 900ms linear infinite; }
+@media (prefers-reduced-motion: reduce) { .loading-line .icon, .live-status .icon { animation: none; } }
+
+/* UX audit WP-7 (5.4): the status lines follow the verdict at a fixed gap instead of pinning to the bottom. */
+.top-left { justify-content: flex-start; gap: var(--space-6); }
+
+/* UX audit WP-8: the map's key line; row ↔ point highlight (ring + label on the point, blue-50 on the row); points move
+   when a Remove re-scores. Reduced motion: instant (base.css). */
+.map-key { margin: var(--space-1) 0 0; max-width: 344px; line-height: var(--lh-tight); }
+.map-hover-ring { fill: none; stroke: var(--gray-900); stroke-width: 2; }
+table.results tr.comp.hovered, table.results tr.comp.hovered td { background: var(--blue-50); transition: background var(--dur-fast) var(--ease); }
+.map-mark, .map-ring, .map-hover-ring, .map-box { transition: cx var(--dur-base) var(--ease), cy var(--dur-base) var(--ease), x var(--dur-base) var(--ease), y var(--dur-base) var(--ease); }
+@media (prefers-reduced-motion: reduce) { .map-mark, .map-ring, .map-hover-ring, .map-box, table.results tr.comp.hovered td { transition: none; } }
+@media print { .map-key { font-size: var(--fs-11); } }
+/* The map's key line adds a line to the map column; the top region gives back 16 px so the rows stay put (WP-8). */
+@media screen and (min-width: 1024px) { main { padding-top: var(--space-5); } .top { margin-bottom: var(--space-5); } }
+ol.steps .note-marker { white-space: normal; } /* inside the step grid's body column the marker wraps (320 px) */
+@media screen and (max-width: 420px) { ol.steps > li { grid-template-columns: 20px 84px minmax(0, 1fr); column-gap: 6px; } }
+
+/* The score scale under the table (Oct 30): plain words a producer reads before the legend. */
+.score-scale { margin: var(--space-3) 0 0; font: var(--type-body); color: var(--fg-1); max-width: 90ch; }
+@media print { .score-scale { font-size: var(--fs-11); margin-top: var(--space-2); } .legend-note { display: none; } } /* on paper the scale line and the numbers note carry the legend; one page */
+
+/* Next step under each flag (Oct 30): what to do, in the row's text colour so it reads as the takeaway. */
+.flag-next { color: var(--fg-1); }
+.flag-item > .flag-next { display: block; font: var(--type-small); margin-top: 2px; max-width: 60ch; white-space: normal; }
+table.results .flag-why { max-width: 60ch; }
+

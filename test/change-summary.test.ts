@@ -10,12 +10,12 @@ describe("removal change summary (WP-C)", () => {
   it("names each comp whose cut label changed, using the computed labels", () => {
     const before = res([comp("Alpha", { considerCutting: true, cutLabel: "Lowest fit, close call" }), comp("Bravo"), comp("Charlie")]);
     const after = res([comp("Alpha", { considerCutting: true, cutLabel: "Consider cutting" }), comp("Bravo")]);
-    expect(removalSummary("Charlie", before, after)).toBe("Rechecked without Charlie. Alpha changed from Lowest fit, close call to Consider cutting.");
+    expect(removalSummary("Charlie", before, after)).toBe("Rechecked without Charlie. Alpha changed from \u201cLowest fit, close call\u201d to \u201cConsider cutting\u201d.");
   });
   it("covers skew flags gained or lost", () => {
     const before = res([comp("Alpha", { skewFlag: { label: "Qloo's estimate" } as never }), comp("Bravo")]);
     const after = res([comp("Alpha"), comp("Bravo", { skewSplit: ["Bravo"] as never })]);
-    expect(flagChanges(before, after)).toEqual(["Alpha changed from Audience outlier to no flag.", "Bravo changed from no flag to Audience split."]);
+    expect(flagChanges(before, after)).toEqual(["Alpha changed from \u201cAudience outlier\u201d to no flag.", "Bravo changed from no flag to \u201cAudience split\u201d."]);
   });
   it("says No flags changed. when nothing moved", () => {
     const before = res([comp("Alpha"), comp("Bravo"), comp("Charlie")]);

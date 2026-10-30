@@ -55,7 +55,7 @@ describe("Why lines", () => {
     expect(a.reasonsExport).toContain("Fit with the other comps: 0.895432. Rank 2 of 5, 0.027 below the next comp.");
     const screen = [...(res.verdictLines ?? []), ...res.comps.flatMap((c) => c.reasons), ...res.steps!.flatMap((s) => [s.reason, s.outcome ?? "", ...(s.details ?? [])])];
     for (const line of screen) expect(line).not.toMatch(/\d\.\d{4,}/);
-    expect(toCsv(res)).toContain("0.895432"); expect(toMarkdown(res)).toContain("Fit with the other comps: 0.895432.");
+    expect(toCsv(res)).toContain("0.895432"); expect(toMarkdown(res)).toContain("Fit with the other comps: 0.895."); // Markdown reads like the page (Oct 30)
     // A score that is right at 3 decimals but wrong at 6 passes on screen and is rejected for export.
     const st = deterministicReasons.structured(a, res, (k) => compLabel(run.state, k)).find((x) => x.template.startsWith("Fit"))!;
     const off = { ...st, claims: st.claims.map((c) => (c.field === "affinity" ? { ...c, value: 0.8951 } : c)) };
@@ -84,21 +84,19 @@ describe("export audience fields (Qloo's estimate)", () => {
     expect(res.comps.find((c) => c.match.input.title === "Elpha")!.audienceExport!.largerGap).toBe("female lean");
     expect(res.deckAudienceExport).toEqual({ meanFemale: "0.131", meanAge: "0.148" });
     const csv = toCsv(res), md = toMarkdown(res);
-    for (const h of ["female lean (Qloo's estimate)", "age lean (Qloo's estimate)", "skew distance, max of |age gap| and |female gap| (Qloo's estimate)", "larger gap (Qloo's estimate)", "age gap vs deck mean (Qloo's estimate)", "female gap vs deck mean (Qloo's estimate)", "deck mean female lean (Qloo's estimate)"]) {
-      expect(csv.split("\n")[0]).toContain(h); expect(md).toContain(h.startsWith("deck") ? "Deck mean, all comps" : h.replace(/\|/g, "\\|"));
-    }
+    // CSV keeps every labeled field; Markdown uses plain columns and drops "skew distance" and "larger gap" (Oct 30).
+    for (const h of ["female lean (Qloo's estimate)", "age lean (Qloo's estimate)", "skew distance, max of |age gap| and |female gap| (Qloo's estimate)", "larger gap (Qloo's estimate)", "age gap vs deck mean (Qloo's estimate)", "female gap vs deck mean (Qloo's estimate)", "deck mean female lean (Qloo's estimate)"]) expect(csv.split("\n")[0]).toContain(h);
     expect(csv).toContain('"0.895432"'); // existing fit field keeps 6
-    expect(md).toContain("| Dlpha | 0.307 | 0.738 | 0.590 | age | 0.590 | 0.176 | older |");
-    // Direction header: CSV carries the label, Markdown reads exactly "age direction" (the section is labeled).
+    expect(md).toContain("## Audience (Qloo's estimate)");
+    expect(md).toContain("| Comp | Female lean | Age lean | Age gap from deck average | Female gap from deck average | Older or younger than the deck | Note |");
+    expect(md).toContain("| Dlpha | 0.307 | 0.738 | 0.590 | 0.176 | older |");
+    expect(md).not.toMatch(/skew distance|larger gap/i);
     expect(csv.split("\n")[0]).toContain(`"age direction (Qloo's estimate)"`);
-    expect(md).toContain("| age direction | Note |"); expect(md).not.toContain("age direction (Qloo's estimate)");
     // Threshold line reads the constant.
-    expect(md).toContain(`Flagged as an audience outlier when skew distance is over ${SKEW_THRESHOLD.toFixed(3)}.`);
+    expect(md).toContain(`A comp is flagged as an audience outlier when its age gap or female gap is over ${SKEW_THRESHOLD.toFixed(3)}.`);
     expect(md).toContain("Lean values are Qloo scores, not percentages. Age lean direction is older or younger than this deck.");
-    expect(md).toContain("age lean 0.148 (Qloo's estimate). This deck leans older overall."); // mean age +0.148, computed
+    expect(md).toContain(`Deck average, all comps: female lean ${res.deckAudienceExport!.meanFemale}; age lean ${res.deckAudienceExport!.meanAge}. This deck leans older overall.`); // mean age +0.148, computed
     expect(md + csv).not.toMatch(/female share|age score|%/);
-    const head = md.split("\n").find((l) => l.startsWith("| Comp | female lean"))!;
-    expect(head.split(/(?<!\\)\|/).length - 2).toBe(9); // pipes inside header text are escaped, so the table keeps 9 columns
   });
 
   it("a comp whose estimate failed exports 'unavailable' plus a note, never invented values", async () => {

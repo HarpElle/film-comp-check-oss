@@ -40,7 +40,7 @@ function fake(): CheckResult {
   const stored = `${CONSIDER_CUTTING}: ${low.match.matchedTitle} (${f3(FAKE_SCORES[n - 1])}, ${exact} below the next comp).`;
   return {
     comps, cutGap: low.rank.gapToNext, ranAt: "2026-01-01T00:00:00.000Z", verdictLines: ["6 of 6 comps matched.", stored], verdict: `6 of 6 comps matched. ${stored}`,
-    steps: [{ n: 1, action: "rank_deck", reason: "Rank by fit.", outcome: `Lowest: ${low.match.matchedTitle}. Gap ${exact}, spread {spread}.`, choice: { label: "x", basis: { sourceId: "rank_deck", field: "gap", phrase: "gap to next", value: exact } } }],
+    steps: [{ n: 2, action: "stop", reason: `The key picture is clear: ${low.match.matchedTitle} trails the deck by ${exact}, so more steps add little.`, origin: "template" }, { n: 1, action: "rank_deck", reason: "Rank by fit.", outcome: `Lowest: ${low.match.matchedTitle}. Gap ${exact}, spread {spread}.`, choice: { label: "x", basis: { sourceId: "rank_deck", field: "gap", phrase: "gap to next", value: exact } } }],
   } as unknown as CheckResult;
 }
 
@@ -57,8 +57,9 @@ describe("withShownGaps: one gap on every surface", () => {
   it("Why lines, export Why lines and the step log quote the shown gap; numbers and the cut stay exact", () => {
     const out = withShownGaps(r), c = out.comps[out.comps.length - 1];
     for (const l of [...c.reasons, ...c.reasonsExport!]) { expect(l).toContain(`${shown} below the next comp`); expect(l).toContain(`Gap ${shown} vs spread`); expect(l).not.toContain(exact); }
-    expect(out.steps![0].outcome).toContain(`Gap ${shown},`);
-    expect(out.steps![0].choice!.basis!.value).toBe(shown);
+    expect(out.steps![1].outcome).toContain(`Gap ${shown},`);
+    expect(out.steps![1].choice!.basis!.value).toBe(shown);
+    expect(out.steps![0].reason).toContain(`trails the deck by ${shown},`); // the agent's stop line (Oct 30)
     expect(c.rank!.gapToNext).toBe(low.rank!.gapToNext);
     expect(out.cutGap).toBe(r.cutGap);
     expect(withShownGaps(out)).toEqual(out); // idempotent
@@ -70,5 +71,12 @@ describe("withShownGaps: one gap on every surface", () => {
     expect(md).toContain(`- ${CONSIDER_CUTTING}: ${low.match.matchedTitle} (${low.fit!.affinity!.toFixed(3)}, ${shown} below the next comp).`);
     expect(csv).toContain(`"${low.rank!.rank} of ${low.rank!.of}","${shown}"`);
     expect(csv).not.toContain(`${exact} below the next comp`);
+  });
+  it("Markdown reads like the page: 3-decimal scores, plain audience columns (Oct 30)", () => {
+    const md = toMarkdown(r);
+    expect(md).toContain(`| ${low.fit!.affinity!.toFixed(3)} |`);
+    expect(md).not.toContain(low.fit!.affinity!.toFixed(6));
+    expect(md).not.toMatch(/skew distance/i);
+    expect(md).toContain(`trails the deck by ${shown}`);
   });
 });

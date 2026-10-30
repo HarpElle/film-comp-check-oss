@@ -14,6 +14,11 @@ describe("parseCompLines", () => {
   it("leaves a title with no year alone", () => {
     expect(parseCompLines("Se7en")).toEqual([{ title: "Se7en", year: undefined, director: undefined }]);
   });
+  it("strips pasted bullets and list numbers (UX audit WP-12)", () => {
+    for (const l of ["\u2022 Get Out (2017)", "- Get Out", "1. Get Out", "2) Get Out", "* Get Out", "\u2013 Get Out", "  \u00b7 Get Out"]) expect(parseCompLines(l)[0].title).toBe("Get Out");
+    expect(parseCompLines("\u2022 Get Out (2017)")[0].year).toBe(2017);
+    for (const t of ["1917", "2001: A Space Odyssey", "10 Cloverfield Lane", "Blade Runner 2049"]) expect(parseCompLines(t)[0].title).toBe(t);
+  });
 });
 
 describe("fit minimum", () => {

@@ -6,6 +6,8 @@ import type { CheckResult, CompResult } from "./types";
  */
 export const cutOf = (c: CompResult): string | undefined => (c.considerCutting ? c.cutLabel : undefined);
 export const skewOf = (c: CompResult): string | undefined => (c.skewFlag ? "Audience outlier" : c.skewSplit ? "Audience split" : undefined);
+/** A computed label in curly quotes (UX audit WP-13); "no flag" stays plain. */
+const q = (l: string | undefined) => (l ? `\u201c${l}\u201d` : "no flag");
 const titleOf = (c: CompResult) => c.match.input.title;
 const same = (a: CompResult, b: CompResult) => titleOf(a) === titleOf(b) && (a.match.input.year ?? null) === (b.match.input.year ?? null);
 
@@ -16,7 +18,7 @@ export function flagChanges(before: CheckResult, after: CheckResult): string[] {
     if (!was) continue;
     for (const pick of [cutOf, skewOf]) {
       const a = pick(was), b = pick(c);
-      if (a !== b) out.push(`${titleOf(c)} changed from ${a ?? "no flag"} to ${b ?? "no flag"}.`);
+      if (a !== b) out.push(`${titleOf(c)} changed from ${q(a)} to ${q(b)}.`);
     }
   }
   return out;

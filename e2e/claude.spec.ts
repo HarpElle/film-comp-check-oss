@@ -70,7 +70,7 @@ test("h. Claude picks steps after the core; a pick changes the screen; nothing r
   expect(qa.notes.length).toBeGreaterThan(0);
   for (const t of qa.notes) expect(t).toBeGreaterThan(qa.table);
   await expect(page.getByTestId("verdict-line")).toHaveText(qa.verdictAtTable); // verdict never changes after core_result
-  await expect(page.getByTestId("note-marker").first()).toContainText("Model chose \u00b7 step");
+  await expect(page.getByTestId("note-marker").first()).toContainText("Claude chose \u00b7 step");
   // Claude's verdict equals the stub's on the same cached deck (expected from the local cache when present).
   await expect(page.getByTestId("verdict-line")).toHaveCount(3, { timeout: 120_000 });
   await expect(page.getByTestId("verdict-line").first()).toHaveText("6 of 6 comps matched.");
@@ -81,8 +81,8 @@ test("h. Claude picks steps after the core; a pick changes the screen; nothing r
   for (const v of Object.values(scores)) expect(v).toMatch(/^0\.\d{6}$/);
   if (EXPECTED) expect(scores).toEqual(EXPECTED.pennywell.scores6); // same scores as the stub, every run
   const tags = new Set(await page.locator('[data-testid="steps"] li[data-n] > [data-testid="origin"], [data-testid="steps"] li[data-n] > details > summary > [data-testid="origin"]').allInnerTexts());
-  expect([...tags].every((t) => t === "Always runs" || t === "Model chose" || t === "Template")).toBe(true);
-  expect(tags.has("Model chose")).toBe(true);
+  expect([...tags].every((t) => t === "Always runs" || t === "Claude chose" || t === "Template")).toBe(true);
+  expect(tags.has("Claude chose")).toBe(true);
   await expect(page.locator('[data-testid="steps"] li', { hasText: /Rejected|Refused/ })).toHaveCount(0);
   const chosen = page.locator('[data-testid="steps"] li[data-origin="model"]');
   expect(await chosen.count()).toBeGreaterThan(0);
@@ -112,7 +112,7 @@ test("h. Claude picks steps after the core; a pick changes the screen; nothing r
 
   // Design brief: the exported sheet.
   await openExport(page);
-  for (const [label, file] of [["Export Markdown", "brief-03-export.md"], ["Export CSV", "brief-03-export.csv"]] as const) {
+  for (const [label, file] of [["Download Markdown (.md)", "brief-03-export.md"], ["Download CSV (.csv)", "brief-03-export.csv"]] as const) {
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
     await dl.saveAs(path.join(QA, file));
   }

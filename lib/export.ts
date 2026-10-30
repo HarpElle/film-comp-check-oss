@@ -5,19 +5,24 @@ import { AUDIENCE_COLUMNS, FIXED_LINE, type CheckResult } from "./types";
 import { compGap, withShownGaps } from "./rank-display";
 
 const EST = " (Qloo's estimate)";
+/** The Markdown audience table's columns, in plain words (the section heading says "Qloo's estimate" once). */
+const MD_AUDIENCE: [(typeof AUDIENCE_COLUMNS)[number][0], string][] = [
+  ["female", "Female lean"], ["age", "Age lean"], ["dAge", "Age gap from deck average"], ["dFemale", "Female gap from deck average"], ["ageDirection", "Older or younger than the deck"],
+];
 
-function row(r: CheckResult["comps"][number], all: CheckResult["comps"]) {
+/** `screen`: the Markdown export, which reads like the page (3-decimal scores, the Why lines as shown). CSV keeps 6. */
+function row(r: CheckResult["comps"][number], all: CheckResult["comps"], screen = false) {
   const m = r.match;
   return {
     comp: `${m.input.title}${m.input.year ? ` (${m.input.year})` : ""}${m.input.director ? `, ${m.input.director}` : ""}`,
     match: m.badge === "Matched" ? `${m.matchedTitle} (${m.matchedYear ?? "?"})` : "",
     badge: m.badge,
-    score: r.fit?.status === "Scored" && typeof r.fit.affinity === "number" ? r.fit.affinity.toFixed(6) : r.agentStatus === "set_aside" ? "Set aside" : r.fit?.status ?? "Not run",
+    score: r.fit?.status === "Scored" && typeof r.fit.affinity === "number" ? r.fit.affinity.toFixed(screen ? 3 : 6) : r.agentStatus === "set_aside" ? "Set aside" : r.fit?.status ?? "Not run",
     rank: r.rank ? `${r.rank.rank} of ${r.rank.of}` : "",
     gap: r.rank ? (compGap(r, all) ?? (r.rank.gapToNext !== undefined ? r.rank.gapToNext.toFixed(3) : "top")) : "", // the gap as shown (lib/rank-display.ts)
     popularity: typeof r.views?.views === "number" ? String(r.views.views) : "",
     flags: [r.considerCutting && r.cutLabel ? r.cutLabel : "", r.skewFlag ? "audience outlier (Qloo's estimate)" : "", r.skewSplit ? "audience split (Qloo's estimate)" : "", r.considerCutting && r.leastViewed ? "also least viewed" : "", m.warning ? "thin record" : "", r.agentStatus === "set_aside" ? "set aside" : "", r.agentStatus === "dropped" ? "dropped" : ""].filter(Boolean).join("; "),
-    reasons: (r.reasonsExport ?? r.reasons).join(" "),
+    reasons: (screen ? r.reasons : r.reasonsExport ?? r.reasons).join(" "),
   };
 }
 
@@ -25,15 +30,17 @@ export function toMarkdown(raw: CheckResult): string {
   const res = withShownGaps(raw);
   const esc = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
   // Dated by the recording when the Qloo values were recorded; otherwise by the run.
-  const lines = ["# Film Comp Check", "", res.recorded ? `Qloo results recorded ${stampDate(res.recorded.at)}. Exported ${stampDate(res.ranAt)}.` : `Run: ${stampDate(res.ranAt)}`, ""];
-  const stamp = recordedStamp(res, { steps: res.comps.filter((c) => c.match.badge === "Matched").length >= MIN_MATCHED_FOR_FIT });
+  // One recorded-date line (Oct 30): a sample's label carries the date, so the head line and the stamp drop theirs.
+  const label = sampleLabel(res);
+  const lines = ["# Film Comp Check", "", label ? `Exported ${stampDate(res.ranAt)}.` : res.recorded ? `Qloo results recorded ${stampDate(res.recorded.at)}. Exported ${stampDate(res.ranAt)}.` : `Run: ${stampDate(res.ranAt)}`, ""];
+  const stamp = recordedStamp(res, { steps: res.comps.filter((c) => c.match.badge === "Matched").length >= MIN_MATCHED_FOR_FIT, date: !label });
   if (sampleLabel(res)) lines.push(`${sampleLabel(res)}.`, "");
   if (stamp) lines.push(`${stamp}.`, "");
   if (res.verdictLines?.length) lines.push("Verdict:", "", ...res.verdictLines.map((l) => `- ${l}`), "");
   lines.push("| Comp | Qloo match | Badge | Fit score | Rank | Gap to next | Flags | Wikipedia views (context) | Reasons |", "|---|---|---|---|---|---|---|---|---|");
-  for (const r of res.comps.map((c) => row(c, res.comps))) lines.push(`| ${esc(r.comp)} | ${esc(r.match)} | ${r.badge} | ${r.score} | ${r.rank} | ${r.gap} | ${esc(r.flags)} | ${r.popularity} | ${esc(r.reasons)} |`);
-  lines.push("", "## Audience (Qloo's estimate)", "", "Computed skew values behind the audience labels, 3 decimals. Skew distance is the larger of |age gap| and |female gap|; larger gap names which one.", "");
-  if (res.skewThresholdExport) lines.push(`Flagged as an audience outlier when skew distance is over ${res.skewThresholdExport}.`, "");
+  for (const r of res.comps.map((c) => row(c, res.comps, true))) lines.push(`| ${esc(r.comp)} | ${esc(r.match)} | ${r.badge} | ${r.score} | ${r.rank} | ${r.gap} | ${esc(r.flags)} | ${r.popularity} | ${esc(r.reasons)} |`);
+  lines.push("", "## Audience (Qloo's estimate)", "", "How far each comp's audience sits from the deck average, to 3 decimals.", "");
+  if (res.skewThresholdExport) lines.push(`A comp is flagged as an audience outlier when its age gap or female gap is over ${res.skewThresholdExport}.`, "");
   lines.push("Lean values are Qloo scores, not percentages. Age lean direction is older or younger than this deck.", "");
   const au0 = res.audience;
   if (au0 && au0.unavailable.length) lines.push(`Audience check incomplete: ${au0.unavailable.length} of ${au0.attempted} comps had no estimate (${au0.unavailable.join(", ")}). Their audience fields read unavailable; the deck mean and gaps use the other ${au0.available}.`, "");
@@ -42,13 +49,15 @@ export function toMarkdown(raw: CheckResult): string {
     const au = res.audience, partial = !!au && au.unavailable.length > 0;
     const basis = partial ? ` (based on ${au!.available} of ${au!.attempted} comps)` : "";
     const overall = typeof m === "number" && res.deckAudienceExport.meanAge ? (m < 0 ? ` This deck leans young overall${basis}.` : m > 0 ? ` This deck leans older overall${basis}.` : "") : "";
-    lines.push(`Deck mean, ${partial ? `the ${au!.available} comps with an estimate` : "all comps"}: female lean ${res.deckAudienceExport.meanFemale}${EST}; age lean ${res.deckAudienceExport.meanAge}${EST}.${overall}`, "");
+    lines.push(`Deck average, ${partial ? `the ${au!.available} comps with an estimate` : "all comps"}: female lean ${res.deckAudienceExport.meanFemale}; age lean ${res.deckAudienceExport.meanAge}.${overall}`, "");
   }
-  lines.push(`| Comp | ${AUDIENCE_COLUMNS.map(([k, h]) => esc(k === "ageDirection" ? h : h + EST)).join(" | ")} | Note |`, `|---|${AUDIENCE_COLUMNS.map(() => "---").join("|")}|---|`);
+  // Plain columns (Oct 30): the "skew distance" and "larger gap" columns repeated the two gaps, so they're left out here.
+  const cols = MD_AUDIENCE.filter(([k]) => AUDIENCE_COLUMNS.some(([x]) => x === k));
+  lines.push(`| Comp | ${cols.map(([, h]) => h).join(" | ")} | Note |`, `|---|${cols.map(() => "---").join("|")}|---|`);
   for (const c of res.comps) {
     const a = c.audienceExport;
     if (!a) continue;
-    lines.push(`| ${esc(c.match.input.title)} | ${AUDIENCE_COLUMNS.map(([k]) => a[k] ?? "").join(" | ")} | ${esc(a.note ?? "")} |`);
+    lines.push(`| ${esc(c.match.input.title)} | ${cols.map(([k]) => a[k] ?? "").join(" | ")} | ${esc(a.note ?? "")} |`);
   }
   const lc = res.liveSample?.compare;
   if (lc) {

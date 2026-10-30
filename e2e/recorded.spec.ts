@@ -57,12 +57,15 @@ test.describe("recorded mode (no Qloo key, empty Qloo cache)", () => {
     await expect(page.getByTestId("calls").locator("xpath=..")).not.toContainText("Recorded run.");
     await expect(page.getByTestId("replay-again")).toHaveText("Run again");
     await assertMap(page);
-    await assertNoScroll(page);
+    // The seeded sample flags every comp (synthetic seeds without the local cache), and each flag carries its reason
+    // and next step inline (UX audit D2, Oct 30), so 2 rows fit; the real recording keeps 5 (e2e/handoff.spec.ts).
+    await assertNoScroll(page, 2);
     await page.screenshot({ path: path.join(QA, "design2-recorded-pennywell.png") });
     await openExport(page);
-    for (const label of ["Export Markdown", "Export CSV"]) {
+    for (const label of ["Download Markdown (.md)", "Download CSV (.csv)"]) {
       const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
-      expect(await fs.readFile((await dl.path())!, "utf8")).toContain(`${s}`);
+      // Markdown keeps one recorded-date line (the sample label's), so its stamp drops the date (Oct 30); CSV keeps it.
+      expect(await fs.readFile((await dl.path())!, "utf8")).toContain(label.includes("Markdown") ? s.replace(/ recorded [A-Z][a-z]{2} \d{1,2}, \d{4}/, " recorded") : `${s}`);
     }
     await page.emulateMedia({ media: "print" });
     await expect(page.getByTestId("print-head")).toContainText(s);
@@ -80,7 +83,7 @@ test.describe("recorded mode (no Qloo key, empty Qloo cache)", () => {
   test("custom-deck form says live checks are paused before anyone types", async ({ page }) => {
     await page.goto(REC!);
     await expect(page.getByTestId("paused-note")).toContainText("Live Qloo checks are paused.");
-    await expect(page.getByRole("button", { name: "Check comps" })).toBeEnabled(); // the box holds the sample
+    await expect(page.locator("#comps")).toHaveValue(""); // UX audit WP-3 (D4): the box starts empty
     await page.locator("#comps").fill(CUSTOM);
     await expect(page.getByRole("button", { name: "Check comps" })).toBeDisabled();
     await page.getByTestId("deck-input").scrollIntoViewIfNeeded();
@@ -113,7 +116,7 @@ test.describe("fewer than 3 matched, and cards at 375px", () => {
     const steps = (await page.getByTestId("steps").innerText().catch(() => ""));
     expect(steps).not.toMatch(/\bfit\b|affinity|close call|least viewed|outlier|audience split|\b0\.\d{3}/i);
   });
-  test("375px: each comp is a card with its fit score, rank and flags; no sideways scroll", async ({ page }) => {
+  test("375px: each comp is a row with its fit score, rank and flags; no sideways scroll", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto(REC!);
     await page.getByRole("button", { name: "Try the Pennywell sample" }).click();
@@ -122,18 +125,18 @@ test.describe("fewer than 3 matched, and cards at 375px", () => {
     await expect(page.locator("table.results thead").first()).toBeHidden();
     const row = page.getByTestId("comp-row").first();
     expect(await row.evaluate((e) => getComputedStyle(e).display)).toBe("flex");
-    // Cells stack inside the card: fit score sits below the comp title, rank below the fit score (no overlap).
-    const [tb, sb, rb] = [await row.getByTestId("comp-toggle").boundingBox(), await row.getByTestId("score").boundingBox(), await row.getByTestId("rank").boundingBox()];
+    // Cells stack inside the card: fit score (with its rank under it) sits below the comp title (no overlap).
+    const [tb, sb] = [await row.getByTestId("comp-toggle").boundingBox(), await row.getByTestId("score").boundingBox()];
     expect(sb!.y).toBeGreaterThanOrEqual(tb!.y + tb!.height);
     // Flags directly under the title, above the Qloo match and fit score (find a row that has a flag).
     const flagged = page.getByTestId("comp-row").filter({ has: page.locator(".flag") }).first();
     const [ft, ff, fm] = [await flagged.getByTestId("comp-toggle").boundingBox(), await flagged.locator(".flags-cell").boundingBox(), await flagged.locator(".match-cell").boundingBox()];
     expect(ff!.y).toBeGreaterThanOrEqual(ft!.y + ft!.height - 1);
     expect(ff!.y + ff!.height).toBeLessThanOrEqual(fm!.y + 1);
-    expect(rb!.y).toBeGreaterThanOrEqual(sb!.y + sb!.height - 1);
     await expect(row.getByTestId("score")).toBeVisible();
-    await expect(row.getByTestId("rank")).toBeVisible();
-    expect(await row.getByTestId("score").evaluate((e) => getComputedStyle(e, "::before").content)).toBe('"Fit score"');
+    // UX audit WP-2: the rank text sits under the fit score (the score cell's ::after, from data-rank) at every width.
+    expect(await row.getByTestId("score").evaluate((e) => getComputedStyle(e, "::after").content)).toBe(`"${(await row.getByTestId("rank").textContent())!.trim()}"`);
+    expect(await row.getByTestId("score").evaluate((e) => getComputedStyle(e, "::before").display)).toBe("none"); // UX audit WP-9: rows, no cell labels
     const box = (await row.boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(375);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
@@ -153,7 +156,7 @@ test.describe("visitor limit", () => {
     await page.locator("#comps").fill(CUSTOM);
     await page.getByRole("button", { name: "Check comps" }).click();
     await waitIdle(page);
-    await expect(page.getByTestId("error-detail")).toHaveText(VISITOR_LIMIT);
+    await expect(page.getByTestId("error-detail")).toHaveCount(0); // the limit card's own body says it (UX audit WP-11, 7.5)
     await expect(page.getByTestId("error-sample")).toBeVisible();
     await expect(page.getByTestId("error-sample-dreamhackers")).toBeVisible();
     await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
@@ -177,7 +180,7 @@ test.describe("replay backup", () => {
     const m = s.match(REPLAYED);
     expect(m, s).not.toBeNull();
     await expect(page.getByTestId("replay-tag")).toHaveText("Replay");
-    expect(Number(m![1])).toBe(await page.getByTestId("steps").getByTestId("origin").filter({ hasText: "Model chose" }).count());
+    expect(Number(m![1])).toBe(await page.getByTestId("steps").getByTestId("origin").filter({ hasText: "Claude chose" }).count());
     expect(Number(m![2])).toBe(await page.getByTestId("steps").locator("li[data-n]").count());
   });
 });
@@ -194,7 +197,7 @@ test.describe("on Vercel (VERCEL=1), never the stub", () => {
       expect(await stamp(page)).toMatch(REPLAYED);
       await noStub();
       await openExport(page);
-      for (const label of ["Export Markdown", "Export CSV"]) {
+      for (const label of ["Download Markdown (.md)", "Download CSV (.csv)"]) {
         const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
         expect(await fs.readFile((await dl.path())!, "utf8")).not.toMatch(/\bStub\b/);
       }
@@ -226,7 +229,7 @@ test.describe("the word Stub never reaches a judge (stub provider running)", () 
   };
   const exportsClean = async (page: import("@playwright/test").Page) => {
     await openExport(page);
-    for (const label of ["Export Markdown", "Export CSV"]) {
+    for (const label of ["Download Markdown (.md)", "Download CSV (.csv)"]) {
       const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
       expect(await fs.readFile((await dl.path())!, "utf8"), label).not.toMatch(/stub/i);
     }
@@ -285,7 +288,7 @@ test.describe("two-date stamp", () => {
     expect(await page.getByTestId("sample-label").evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(14);
     await expect(page.getByTestId("print-head")).toContainText(LINE);
     await openExport(page);
-    for (const label of ["Export Markdown", "Export CSV"]) {
+    for (const label of ["Download Markdown (.md)", "Download CSV (.csv)"]) {
       const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
       expect(await fs.readFile((await dl.path())!, "utf8"), label).toContain(LINE);
     }
@@ -318,7 +321,7 @@ test.describe("design critique fixes", () => {
     await menu.locator("summary").click();
     await expect(menu.getByRole("menu")).toBeVisible();
     // Three export items (WP-J) plus Copy share link.
-    await expect(menu.getByRole("menuitem")).toHaveText([/Export sheet/, "Export Markdown", "Export CSV", /Copy share link/]);
+    await expect(menu.getByRole("menuitem")).toHaveText([/Print one-page sheet/, /Download Markdown \(\.md\)/, /Download CSV \(\.csv\)/, /Copy share link/]);
     await page.keyboard.press("Escape");
     expect(await menu.evaluate((d) => (d as HTMLDetailsElement).open)).toBe(false);
     await menu.locator("summary").click();
@@ -328,7 +331,10 @@ test.describe("design critique fixes", () => {
     for (const s of await page.locator("table.results thead th").evaluateAll((ths) => ths.map((t) => t.getAttribute("scope")))) expect(s).toBe("col");
     // Muted text #6a6a6a (AA on white and on the #f2f2f2 row tint); control borders #949494 (3:1).
     expect(await page.getByTestId("legend").evaluate((e) => getComputedStyle(e).color)).toBe("rgb(106, 106, 106)");
-    expect(await page.getByTestId("appbar").getByRole("button", { name: "Edit comps" }).evaluate((e) => getComputedStyle(e).borderTopColor)).toBe("rgb(148, 148, 148)");
+    // Secondary controls (Export) keep the 3:1 border; Edit comps is a ghost button (UX audit WP-7, 5.11).
+    await page.mouse.move(0, 400); // off the button: its hover border fades back over --dur-fast
+    await expect.poll(() => menu.locator("summary").evaluate((e) => getComputedStyle(e).borderTopColor)).toBe("rgb(148, 148, 148)");
+    await expect(page.getByTestId("appbar").getByRole("button", { name: "Edit comps" })).toHaveClass(/ghost/);
     // Appbar buttons share one height.
     const [eb, xb] = [await page.getByTestId("appbar").getByRole("button", { name: "Edit comps" }).boundingBox(), await menu.locator("summary").boundingBox()];
     expect(Math.abs(eb!.height - xb!.height)).toBeLessThanOrEqual(1);
@@ -356,12 +362,12 @@ test.describe("design critique fixes", () => {
     const accent = page.locator("tr.comp.accent").first();
     if (await accent.count()) expect(await accent.evaluate((e) => getComputedStyle(e).boxShadow)).toContain("inset");
     const split = page.locator("tr.comp.split").first();
-    if (await split.count()) expect(await split.evaluate((e) => getComputedStyle(e).borderLeftStyle)).toBe("dashed");
+    if (await split.count()) expect(await split.evaluate((e) => getComputedStyle(e).outlineStyle)).toBe("dashed"); // DS split row: dashed outline (UX audit WP-2)
     const row = page.getByTestId("comp-row").first();
     await row.getByTestId("comp-toggle").click();
     const [rb, db] = [(await row.boundingBox())!, (await page.getByTestId("comp-detail").first().boundingBox())!];
     expect(Math.abs(db.y - (rb.y + rb.height))).toBeLessThanOrEqual(1);
-    expect(await page.getByTestId("comp-detail").first().locator("td").evaluate((e) => getComputedStyle(e).borderLeftStyle)).toBe("solid");
+    expect(await page.getByTestId("comp-detail").first().locator("td").evaluate((e) => getComputedStyle(e).borderLeftStyle)).toBe("none"); // rows, not boxed cards (WP-9)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   });
 

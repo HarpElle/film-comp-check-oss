@@ -48,7 +48,7 @@ for (const vp of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
       await expectRunError(page, CANT_REACH);
       await expect(page.getByTestId("error-detail")).toHaveCount(0); // the Qloo card has no small server line under it
       await expect(page.getByTestId("error-retry")).toHaveText("Try again");
-      await expect(page.getByTestId("error-sample")).toHaveText("Open a sample deck");
+      await expect(page.getByTestId("error-sample")).toHaveText("Pennywell sample");
       await expect(page.getByTestId("results")).toHaveCount(0);
       await expect(page.getByTestId("last-result")).toHaveCount(0);
       await page.unroute(/\/api\/check/);
@@ -100,7 +100,7 @@ for (const vp of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
       await expect(page.getByTestId("change-summary-text")).toHaveText(removalSummary(target, rec, res));
     });
 
-    test("match panels: an unmatched comp (Edit list) and a comp with several records (pick one puts its year on the line)", async ({ page }) => {
+    test("match panels: an unmatched comp (Edit comps) and a comp with several records (pick one puts its year on the line)", async ({ page }) => {
       const rec = recording("pennywell");
       const [u, m] = [rec.comps[0].match, rec.comps[1].match];
       const other = { title: m.matchedTitle!, year: (m.matchedYear ?? 2000) - 40, type: "Film" as const }; // invented second record

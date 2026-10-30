@@ -69,7 +69,9 @@ for (const vp of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
       expect(seen.removed.length).toBeGreaterThan(0);
       for (const r of seen.removed) { const [s, t, h] = r.split("|"); expect(s).toBe(REMOVE); expect(t).toContain("Removed"); expect(Number(h)).toBeLessThanOrEqual(29); }
       await expect(page.getByTestId("comp-row")).toHaveCount(before.comps.length - 1);
-      await expect(page.getByTestId("removed-row")).toHaveCount(0);
+      // UX audit WP-5: the removed comp keeps its collapsed row, with an Undo, until Undo.
+      await expect(page.getByTestId("removed-row")).toHaveCount(1);
+      await expect(page.getByTestId("removed-row-undo")).toBeVisible();
       await expect(page.getByTestId("change-summary-text")).toHaveText(removalSummary(REMOVE, before, after));
       // The rows show the server's computed labels (the demo state: the new lowest fit).
       const cut = after.comps.find((c) => c.considerCutting);
@@ -86,10 +88,10 @@ for (const vp of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
       // Judge mode, sample run: no "paused for today" line anywhere.
       await expect(page.locator("body")).not.toContainText("paused for today");
       await expect(page.locator("body")).not.toContainText(/\bStub\b/);
-      // Focus: Remove moves it to Undo.
+      // Focus: Remove moves it to Undo (on phones the removed row's Undo, next to the rows; UX audit WP-5).
       const undo = page.getByTestId("undo-remove");
       await expect(undo).toHaveText(`Undo, put ${REMOVE} back`);
-      await expect(undo).toBeFocused();
+      await expect(page.getByTestId(vp.width <= 720 ? "removed-row-undo" : "undo-remove")).toBeFocused();
       await undo.click();
       await waitIdle(page);
       await expect(page.getByTestId("comp-row")).toHaveCount(before.comps.length);
@@ -98,6 +100,9 @@ for (const vp of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
       expect(await scores(page)).toEqual(before6);
       await expect(page.locator(`[data-testid=comp-row][data-title="${REMOVE}"] [data-testid=comp-toggle]`)).toBeFocused();
       await expect(page.getByTestId("undo-remove")).toHaveCount(0);
+      await expect(page.getByTestId("removed-row")).toHaveCount(0);
+      await expect(page.getByTestId("was-score")).toHaveCount(0);
+      await expect(page.getByTestId("was-flag")).toHaveCount(0);
     });
   });
 }
@@ -162,7 +167,7 @@ const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Every surface's gap for each comp: the row, the Why line, the verdict fit line (cut comp), print, Markdown, CSV. */
 async function surfaces(page: Page, gaps: ReturnType<typeof gapsOf>) {
-  const md = await download(page, "Export Markdown"), csv = await download(page, "Export CSV");
+  const md = await download(page, "Download Markdown (.md)"), csv = await download(page, "Download CSV (.csv)");
   const head = csv.split("\n")[0].split(","), gi = head.indexOf("gap_to_next"), ri = head.indexOf("reasons");
   const csvRows = csv.trim().split("\n").slice(1).map((l) => l.slice(1, -1).split('","').map((x) => x.replace(/""/g, '"')));
   const out: Record<string, Record<string, string>> = {};

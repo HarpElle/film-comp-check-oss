@@ -3,9 +3,10 @@
 import { showPausedToday } from "@/lib/paused-today";
 import { useEffect, useRef, useState } from "react";
 import { PENNYWELL } from "@/lib/demo";
+import { COPY, DECKCHIP, PRINT_HEAD, PROVENANCE, SCALE, TABLE } from "@/lib/copy";
 import type { PageStatus } from "@/lib/status";
 import { formatCompLines, parseCompLines } from "@/lib/parse";
-import { AGENT_DOWN, agentDown, BROKEN_LINK, deckError, runError, type ErrorAction, type ErrorView } from "@/lib/error-state";
+import { AGENT_DOWN, agentDown, BROKEN_LINK, deckError, OFFLINE_MESSAGE, runError, sharedDeckLine, STOPPED_LINE, type ErrorAction, type ErrorView } from "@/lib/error-state";
 import { AgentDownNotice, MatchPanels, RunErrorPanel } from "./components/ErrorPanel";
 import { readEvents } from "@/lib/events";
 import { type AgentStep, type CheckResult, type CompInput, type CompResult, type MatchOption } from "@/lib/types";
@@ -17,7 +18,7 @@ import { readShare, shareSearch } from "@/lib/share";
 import { removalSummary, restoreAt } from "@/lib/change-summary";
 import { MIN_MATCHED_FOR_FIT } from "@/lib/limits";
 import { compareRuns, fitDiffs, fitsOf } from "@/lib/compare";
-import { withShownGaps } from "@/lib/rank-display";
+import { compGap, withShownGaps } from "@/lib/rank-display";
 import { loadDraft, saveDraft } from "@/lib/draft";
 import { recordedStamp, sampleLabel } from "@/lib/stamp";
 import { AppHeader } from "./components/AppHeader";
@@ -32,8 +33,14 @@ import { LiveSteps, StepsLog } from "./components/Steps";
 
 type LiveKind = "sample" | "sample-second";
 
+/** UX audit WP-10 (8.9): the tab names the deck after a run, and the product on the landing. */
+function DocTitle({ title }: { title: string }) {
+  useEffect(() => { document.title = title; }, [title]);
+  return null;
+}
+
 export default function CompCheck({ initialStatus }: { initialStatus: PageStatus | null }) {
-  const [text, setText] = useState(formatCompLines(PENNYWELL));
+  const [text, setText] = useState(""); // UX audit WP-3 (D4): the box starts empty; samples, drafts and share links fill it
   const [result, setResult] = useState<CheckResult | null>(null);
   const [busy, setBusy] = useState(false);
   const menuRef = useRef<HTMLDetailsElement>(null);
@@ -55,7 +62,9 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
   useEffect(() => {
     if (wasBusy.current && !busy) {
       const f = focusAfter.current; focusAfter.current = null;
-      const el = f?.kind === "undo" ? document.querySelector<HTMLElement>("[data-testid=undo-remove]")
+      // UX audit WP-5 (11.3): on phones the removed row's Undo is next to the rows; the status line's is a screen up.
+      const phone = window.matchMedia("(max-width: 720px)").matches;
+      const el = f?.kind === "undo" ? (phone && document.querySelector<HTMLElement>("[data-testid=removed-row-undo]")) || document.querySelector<HTMLElement>("[data-testid=undo-remove]")
         : f?.kind === "title" ? document.querySelector<HTMLElement>(`[data-testid=comp-row][data-title="${CSS.escape(f.title)}"] [data-testid=comp-toggle]`) : null;
       // Undo and the restored title are scrolled into view (on a phone the Remove button can be a screen below the summary).
       if (el) el.focus(); else verdictRef.current?.focus({ preventScroll: true });
@@ -71,14 +80,19 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string | null>(null); // the user's own comps, kept in this browser only (lib/draft.ts)
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [deckOrder, setDeckOrder] = useState(false); // phones: flagged comps first unless this is on (D7)
+  const [deckOrder, setDeckOrder] = useState(false);
+  const [hoverKey, setHoverKey] = useState<string | null>(null); // row ↔ map point (UX audit WP-8) // phones: flagged comps first unless this is on (D7)
   const [pending, setPending] = useState<CompInput[]>([]);
   const [lastRun, setLastRun] = useState<{ comps: CompInput[]; fresh: boolean; live?: LiveKind; keepRemoval?: boolean } | null>(null);
   const [failedRemove, setFailedRemove] = useState<string | null>(null); // the title a failed Remove was re-scoring without
   const [firstLive, setFirstLive] = useState<CheckResult | null>(null); // the first live sample run, for the live-vs-live comparison
   const [repeat, setRepeat] = useState<string | null>(null);
+  const [sharedText, setSharedText] = useState<string | null>(null); // the box text a ?c= link filled in (WP-11, 9.3)
+  const [stoppedNote, setStoppedNote] = useState(false); // Stop with no result yet (WP-11, 9.4)
   // Before anyone types: are live Qloo checks on, and which recorded samples exist (no Qloo call behind this).
   const [status, setStatus] = useState<PageStatus | null>(initialStatus);
+  const statusRef = useRef(status);
+  statusRef.current = status;
   const loadStatus = () => fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => setStatus(null));
   // A step or note hash (typed or followed) opens its container and focuses the target (WP-G).
   useEffect(() => {
@@ -94,6 +108,28 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
   // A share link carries its deck in the URL (lib/share.ts). A recorded sample replays by itself (0 Qloo calls);
   // any other deck is only filled in, so opening a link never spends a live check.
   const shareRead = useRef(false);
+  // WP-14 (14.3): a run the visitor starts from the landing gets its own history entry, so Back returns to the landing.
+  const pushNext = useRef(false);
+  const startedRef = useRef(false);
+  startedRef.current = started;
+  useEffect(() => {
+    const onPop = () => {
+      const q = new URLSearchParams(location.search);
+      if (!q.has("c") && !q.has("sample")) {
+        abortRef.current?.abort();
+        setStarted(false); setEditing(false);
+        return;
+      }
+      if (startedRef.current) return;
+      // Forward to a result URL: a recorded sample replays (0 Qloo calls); any other deck is only filled in.
+      const sh = readShare(location.search);
+      if (!sh || sh.error) return;
+      setText(formatCompLines(sh.comps));
+      if (statusRef.current?.samples.some((sm) => formatCompLines(sm.comps) === formatCompLines(sh.comps))) check(sh.comps);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const removeAfter = useRef<string | null>(null);
   useEffect(() => {
     const t = removeAfter.current;
@@ -113,6 +149,7 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
     const sh = readShare(location.search);
     if (!sh) { const d = loadDraft(); if (d) { setDraft(d); setText(d); } return; }
     setText(formatCompLines(sh.comps));
+    if (!sh.error && sh.comps.length) setSharedText(formatCompLines(sh.comps));
     if (!sh.error && status.samples.some((sm) => formatCompLines(sm.comps) === formatCompLines(sh.comps))) { check(sh.comps); return; }
     // An empty deck is a broken link (the copy's line); too few or too many comps keep the deck's own message.
     if (sh.error) setFieldError(sh.error === "empty" ? BROKEN_LINK : deckError(formatCompLines(sh.comps)));
@@ -121,19 +158,23 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
   const [copied, setCopied] = useState<string | null>(null);
   const copyLink = async () => {
     const url = location.href.split("#")[0];
-    try { await navigator.clipboard.writeText(url); setCopied("Link copied."); } catch { setCopied(url); }
+    try { await navigator.clipboard.writeText(url); setCopied(PROVENANCE.copied); } catch { setCopied(url); }
   };
 
   async function check(comps: CompInput[], fresh = false, live?: LiveKind, keepRemoval = false) {
     const v = deckError(formatCompLines(comps));
     if (v) { setFieldError(v); setEditing(true); return; }
     if (!keepRemoval) setRemoval(null);
+    setStoppedNote(false);
     const removal0 = keepRemoval ? removalRef.current : null;
+    if (!started && pushNext.current) history.pushState(null, "", `${location.pathname}${shareSearch(comps)}`);
+    pushNext.current = false;
     setStarted(true); setEditing(false); setPending(comps); setCopied(null); setLastRun({ comps, fresh, live, keepRemoval }); setFailedRemove(null); setRepeat(null);
     if (live !== "sample-second") setFirstLive(null);
     const prev = fresh ? result : null;
     setBusy(true); setError(null); setFieldError(null); setLive([]); setPartial(null); setStale(false);
     const ac = new AbortController(); abortRef.current = ac;
+    let anyEvent = false;
     try {
       const r = await fetch("/api/check?stream=1", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" }, body: JSON.stringify({ comps, fresh, live }), signal: ac.signal });
       if (!r.ok || !r.body) {
@@ -142,6 +183,7 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
       }
       let got = false;
       for await (const ev of readEvents(r.body)) {
+        anyEvent = true;
         if (ev.type === "step") {
           setLive((prev) => [...prev.filter((x) => x.n !== ev.step.n), ev.step].sort((a, b) => a.n - b.n));
           const note = ev.step.note;
@@ -161,7 +203,9 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
       history.replaceState(null, "", `${location.pathname}${shareSearch(comps)}`);
     } catch (e) {
       if (ac.signal.aborted) { stopped(keepRemoval ? removal0 : null); return; }
-      setError(e instanceof Error ? e.message : "The check stopped.");
+      // Offline (WP-11, 9.1): the browser says so, or the request failed before any event arrived.
+      const offline = (typeof navigator !== "undefined" && !navigator.onLine) || (e instanceof TypeError && !anyEvent);
+      setError(offline ? OFFLINE_MESSAGE : e instanceof Error ? e.message : "The check stopped.");
       // A failed Remove leaves the previous results and their deck in place (copy item 9).
       if (keepRemoval && removal0 && !removal0.undone) { setFailedRemove(removal0.title); setText(formatCompLines(removal0.before.comps.map((c) => c.match.input))); }
     } finally { if (abortRef.current === ac) abortRef.current = null; setBusy(false); setLive([]); setPartial(null); setStale(false); if (live) loadStatus(); }
@@ -173,7 +217,7 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
   function stopped(rm: typeof removal) {
     if (rm && !rm.undone) { setRemoval(null); removalRef.current = null; setText(formatCompLines(rm.before.comps.map((c) => c.match.input))); }
     else if (rm) { const back = { ...rm, undone: false }; setRemoval(back); removalRef.current = back; if (result) setText(formatCompLines(result.comps.map((c) => c.match.input))); }
-    if (!result) { setStarted(false); requestAnimationFrame(() => document.getElementById("comps")?.focus()); }
+    if (!result) { setStarted(false); setStoppedNote(true); requestAnimationFrame(() => document.getElementById("comps")?.focus()); }
   }
 
   function remove(key: string) {
@@ -241,16 +285,17 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
     else setEditing(true);
   };
   const editText = (v: string) => {
-    setText(v);
+    setText(v); setStoppedNote(false);
     if (saveDraft(v, isSample)) setDraft(v);
     else if (!v.trim()) setDraft(null);
   };
   const deckInput = (
     <DeckInput text={text} onText={editText} paused={status && !status.qlooLive ? status.paused ?? "" : undefined} busy={busy} blocked={ownDeckBlocked}
       draft={draft} onRestore={() => { setText(draft!); setFieldError(null); }} onClose={started ? () => setEditing(false) : undefined}
-      onCheck={() => check(parseCompLines(text))} fieldError={fieldError}
+      onCheck={() => { pushNext.current = !started; check(parseCompLines(text)); }} fieldError={fieldError}
+      note={sharedText !== null && text === sharedText ? sharedDeckLine(parseCompLines(text).length) : undefined} stoppedNote={stoppedNote ? STOPPED_LINE : undefined} liveChecks={status?.qlooLive ? status.liveChecksPerDay : undefined}
       onFieldAction={(a) => {
-        if (a === "new-check") history.replaceState(null, "", location.pathname); // drop the broken link
+        if (a === "new-check" || fieldError?.kind === "broken-link") history.replaceState(null, "", location.pathname); // drop the broken link
         setFieldError(null); document.getElementById("comps")?.focus();
       }} />
   );
@@ -258,12 +303,13 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
   if (!started) {
     return (
       <div className="page">
+        <DocTitle title={COPY.title} />
         <AppHeader />
         <main>
-          <Landing status={status} busy={busy} pausedToday={pausedToday()} onSample={(comps) => { setText(formatCompLines(comps)); check(comps); }} />
+          <Landing status={status} busy={busy} pausedToday={pausedToday()} onSample={(comps) => { setText(formatCompLines(comps)); pushNext.current = true; check(comps); }} />
           {deckInput}
         </main>
-        <Footer limits />
+        <Footer limits={false} />
       </div>
     );
   }
@@ -284,8 +330,12 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
   const notFound = shown && <MatchPanels comps={shown.comps} onEdit={() => { setEditing(true); requestAnimationFrame(() => document.getElementById("comps")?.focus()); }} onPick={pickOption} />;
   const chipSample = status?.samples.find((sm) => formatCompLines(sm.comps) === formatCompLines(shown ? shown.comps.map((c) => c.match.input) : pending));
   const chipN = shown?.comps.length ?? pending.length;
-  // WP-A deck chip: "Pennywell sample · 6 comps", or "{n} comps".
-  const deckChip = chipSample ? `${chipSample.label.replace(/\s*deck$/i, "")} sample \u00b7 ${chipN} comps` : `${chipN} comps`;
+  // WP-A deck chip: "Pennywell sample · 6 comps", or "{n} comps"; after a Remove, "Pennywell sample · 5 of 6 comps" (WP-5).
+  // UX audit WP-6 (1.7): a recorded sample loads, it doesn't check with Qloo.
+  const loadingSample = status?.samples.find((sm) => sm.id === sampleIdOf(pending));
+  const chipComps = shown ? shown.comps.map((c) => c.match.input) : pending;
+  const partOf = !chipSample && chipComps.length > 0 && sampleRun(chipComps) ? status?.samples.find((sm) => chipComps.every((c) => sm.comps.some((x) => formatCompLines([x]) === formatCompLines([c])))) : undefined;
+  const deckChip = chipSample ? DECKCHIP.full(chipSample.label, chipN) : partOf ? DECKCHIP.part(partOf.label, chipN, partOf.comps.length) : DECKCHIP.custom(chipN);
   // WP-K / D7: on phones, flagged comps first unless the visitor picks deck order.
   const isFlagged = (c: CompResult) => !tooFew && (!!c.skewFlag || !!c.skewSplit || !!c.considerCutting);
   const colCount = 8 - (tooFew ? 1 : 0) - (showFlags ? 0 : 1);
@@ -293,31 +343,32 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
 
   return (
     <div className="page">
+      <DocTitle title={result && !busy ? `${deckChip} \u00b7 ${COPY.title}` : COPY.title} />
       <AppHeader results={{ chip: deckChip, editing, onEdit: () => setEditing((e) => !e) }}>
-        {!hideResults && <ExportMenu result={result} busy={busy} menuRef={menuRef} onCopyLink={copyLink} copied={copied} />}
+        {!hideResults && <ExportMenu result={result} busy={busy} menuRef={menuRef} onCopyLink={copyLink} copied={copied} sampleId={result ? sampleIdOf(result.comps.map((c) => c.match.input)) : undefined} />}
       </AppHeader>
       <main>
         {editing && deckInput}
-        <div className="print-only small" data-testid="print-head">Film Comp Check sheet. {shown ? `Run ${ct(shown.ranAt)}. ${sampleLabel(shown) ? `${sampleLabel(shown)}. ` : ""}${recordedStamp(shown, { steps: !tooFew && !busy, date: !(removal && !removal.undone) }) ? `${recordedStamp(shown, { steps: !tooFew && !busy, date: !(removal && !removal.undone) })}. ` : ""}Fit scores come from Qloo data, computed the same way every time.` : ""}</div>
+        <div className="print-only small" data-testid="print-head">{PRINT_HEAD.lead} {shown ? `${shown.recorded ? PRINT_HEAD.printed(ct(shown.ranAt)) : PRINT_HEAD.run(ct(shown.ranAt))} ${sampleLabel(shown) ? `${sampleLabel(shown)}. ` : ""}${recordedStamp(shown, { steps: !tooFew && !busy, date: !(removal && !removal.undone) }) ? `${recordedStamp(shown, { steps: !tooFew && !busy, date: !(removal && !removal.undone) })}. ` : ""}${PRINT_HEAD.fit}` : ""}</div>
         <section className={`top${shown && tooFew ? " single" : ""}`} data-testid="top">
           <div className="top-left">
           <div className="top-lead">
             {errOn ? (
-              <RunErrorPanel view={runError(error!, failedRemove ?? undefined)} detail={error!} on={onErrorAction}
-                extra={status?.samples.some((sm) => sm.id === "dreamhackers") && <button className="btn" disabled={busy} data-testid="error-sample-dreamhackers" onClick={() => { const d = status.samples.find((sm) => sm.id === "dreamhackers")!.comps; setText(formatCompLines(d)); check(d); }}>Dream Hackers sample</button>} />
+              <RunErrorPanel view={runError(error!, failedRemove ?? undefined)} detail={error!} on={onErrorAction} pageHeading={hideResults}
+                extra={!failedRemove && status?.samples.some((sm) => sm.id === "dreamhackers") && <button className="btn" disabled={busy} data-testid="error-sample-dreamhackers" onClick={() => { const d = status.samples.find((sm) => sm.id === "dreamhackers")!.comps; setText(formatCompLines(d)); check(d); }}>Dream Hackers sample</button>} />
             ) : null}
             {errOn && shown && <p className="last-result small muted" data-testid="last-result">Last result: {shown.comps.length} comps</p>}
             {!busy && !errOn && agentDown(shown) && <AgentDownNotice view={AGENT_DOWN} disabled={busy} onAgain={() => check(shown!.comps.map((c) => c.match.input), true)} />}
             {shown && !errOn && sampleLabel(shown) && <p className="sample-label small muted" data-testid="sample-label">{sampleLabel(shown)}.</p>}
             {hideResults ? null : shown && tooFew ? (
-              <div className="verdict" data-testid="verdict-too-few" aria-live="polite">
+              <div className="verdict" data-testid="verdict-too-few">
                 <h1 className="sr-only" ref={verdictRef} tabIndex={-1} data-testid="verdict-heading">Verdict</h1>
                 <ol className="verdict-lines"><li data-testid="verdict-line" data-kind="matched" className="verdict-line"><span className="v-icon v-muted"><Icon name="alert" size={18} /></span><span className="v-text">{countLine}</span></li></ol>
                 <p className="too-few" data-testid="too-few">Only {matchedN} {matchedN === 1 ? "comp" : "comps"} matched. Fit scores need at least {MIN_MATCHED_FOR_FIT}, so there&apos;s no verdict yet. Fix or add comps and run again.</p>
                 {notFound}
               </div>
             ) : shown?.verdictLines ? (
-              <div className="verdict" data-testid="verdict" aria-live="polite">
+              <div className="verdict" data-testid="verdict">
                 <h1 className="sr-only" ref={verdictRef} tabIndex={-1} data-testid="verdict-heading">Verdict</h1>
                 <VerdictLines lines={shown.verdictLines} r={shown} countLine={countLine} />
                 {notFound}
@@ -325,7 +376,7 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
             ) : (
               <div className="verdict" data-testid="loading-state" aria-busy="true">
                 <h1 className="sr-only">Verdict</h1>
-                <p className="loading-line"><Icon name="loader" />Checking {pending.length} comps with Qloo. Steps appear below as they finish.</p>
+                <p className="loading-line"><Icon name="loader" />{loadingSample ? PROVENANCE.loadingSample(loadingSample.label) : PROVENANCE.loadingCustom(pending.length)}</p>
                 <div className="skel" style={{ width: "40%" }} /><div className="skel" style={{ width: "85%" }} /><div className="skel" style={{ width: "70%" }} />
               </div>
             )}
@@ -336,14 +387,17 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
                 removal={removal} removalLine={removalLine} canUndo={!busy && !!removal && !removal.undone && !!result} onUndo={undoRemove} liveLine={liveLine}
                 sampleId={status?.sampleLiveOn ? sid : undefined} liveGateOpen={!!sid && !!status?.sampleLiveOn && !!status?.sampleLive?.[sid]?.first}
                 onRunAgain={() => check(parseCompLines(text), true)} onRunLive={() => check(shown.comps.map((c) => c.match.input), false, "sample")}
-                pausedLive={!!shown.recorded && pausedToday(shown.comps.map((c) => c.match.input))} repeat={repeat} />;
+                pausedLive={!!shown.recorded && pausedToday(shown.comps.map((c) => c.match.input))} repeat={repeat}
+                onSteps={() => { const first = shown.steps?.find((st) => st.origin && st.origin !== "core"); if (first) goStep(first.n); }} />;
             })()}
             {coldRun && <ColdStatusLines liveLine={liveLine} />}
           </div>
-          {shown && tooFew ? null : shown ? <DeckMap r={shown} updating={updating} /> : hideResults ? null : (
+          {shown && tooFew ? null : shown ? <DeckMap r={shown} updating={updating} hoverKey={hoverKey} onHover={setHoverKey} /> : hideResults ? null : (
             <DeckMapSkeleton note="The map appears when the audience estimates are in." />
           )}
         </section>
+        {/* WP-11 (9.2): a first run of the visitor's own deck failed: the box stays right under the error (no focus move). */}
+        {hideResults && !editing && !!lastRun && !lastRun.live && !sampleRun(lastRun.comps) && deckInput}
 
         {shown && !tooFew && phoneOrder.length > 0 && shown.comps.some(isFlagged) && (
           <p className="phone-order phone-only" data-testid="phone-order">
@@ -353,9 +407,23 @@ export default function CompCheck({ initialStatus }: { initialStatus: PageStatus
         )}
         {!hideResults && <ResultsTable shown={shown} pending={pending} tooFew={tooFew} showFlags={showFlags} colCount={colCount} deckOrder={deckOrder} updating={updating} busy={busy}
           open={open} onToggle={(key) => setOpen((o) => ({ ...o, [key]: !o[key] }))} onRemove={remove} removedPending={removedPending} phoneOrder={phoneOrder}
-          isFlagged={isFlagged} noteStep={noteStep} stepOrigin={(n) => stepList.find((st) => st.n === n)?.origin} onStep={goStep} />}
+          isFlagged={isFlagged} noteStep={noteStep} stepOrigin={(n) => stepList.find((st) => st.n === n)?.origin} onStep={goStep}
+          hoverKey={hoverKey} onHover={setHoverKey}
+          removed={removal && !removal.undone && !error && result ? { before: removal.before, title: removal.title, index: removal.index, onUndo: undoRemove } : null} />}
         {shown?.liveSample?.compare && !busy && <LiveCompare shown={shown} secondOpen={!!status?.sampleLive?.[shown.liveSample.sampleId]?.second} onSecond={() => check(shown.comps.map((c) => c.match.input), false, "sample-second")} />}
-        {shown && !tooFew && <p className="small muted legend-note" data-testid="legend">Fit score: how well this comp fits with the rest of your list, scored by Qloo the same way every time. Higher fits better. <span className="no-print">Open a comp for its Why lines and audience bars.</span></p>}
+        {shown && !tooFew && (() => {
+          // Display only: the gaps as shown in the rows (lib/rank-display.ts); nothing is re-scored.
+          const gaps = shown.comps.map((c) => compGap(c, shown.comps)).filter((g): g is string => g !== undefined);
+          const close = gaps.length > 0 && gaps.every((g) => Number(g) <= SCALE.closeGap);
+          return <p className="score-scale" data-testid="score-scale">{SCALE.line}{close && <> <span data-testid="score-scale-close">{SCALE.close}</span></>}</p>;
+        })()}
+        {shown && !tooFew && <p className="small muted legend-note" data-testid="legend">{TABLE.legend} <span className="no-print">{TABLE.legendScreen}</span></p>}
+        {shown && !tooFew && (
+          <details className="how-numbers" data-testid="how-numbers">
+            <summary><Icon name="chevronRight" />{PROVENANCE.howNumbersSummary}</summary>
+            <ul>{PROVENANCE.howNumbers.map((l, i) => <li key={i}>{l}</li>)}</ul>
+          </details>
+        )}
 
         {busy && <LiveSteps live={live} choosing={!!partial && partial.provider !== "stub" && !chosenYet} />}
         {!busy && result?.steps && !hideResults && <StepsLog result={{ ...result, steps: result.steps }} tooFew={tooFew} open={stepsOpen} onToggle={() => setStepsOpen((o) => !o)} titleOfKey={titleOfKey} onNote={goNote} />}

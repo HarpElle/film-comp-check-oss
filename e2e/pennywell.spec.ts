@@ -1,4 +1,4 @@
-import { FOLDED } from "../lib/copy";
+import { COPY, TABLE } from "../lib/copy";
 import { test, expect, type Page } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -43,15 +43,14 @@ test.describe.serial("Pennywell flow", () => {
 
   test("a. load Pennywell and run the check", async () => {
     await page.goto("/");
-    const text = await page.locator("#comps").inputValue();
-    for (const t of PENNYWELL) expect(text).toContain(t);
+    await expect(page.locator("#comps")).toHaveValue(""); // UX audit WP-3 (D4): the box starts empty
     // Landing copy, verbatim.
-    await expect(page.locator("h1")).toHaveText("Film Comp Check");
+    await expect(page.locator("h1")).toHaveText(COPY.purpose); // UX audit WP-3 (D3): the purpose is the h1
     await expect(page).toHaveTitle("Film Comp Check");
     await expect(page.getByTestId("purpose")).toHaveText("Check whether each film on your comp slide belongs there.");
     await expect(page.getByTestId("intro")).toHaveText("For producers checking a comp slide before it goes to investors.");
     // The four explainer parts, folded into two lines by cutting only (test/copy.test.ts checks the cut).
-    await expect(page.getByTestId("about-line")).toHaveText([...FOLDED]);
+    await expect(page.getByTestId("about-line")).toHaveText([COPY.whoPays, COPY.differs]); // labeled "How it differs" (WP-3)
     // This server has no store configured: the landing shows no sample snippet (never hardcoded). e2e/recorded.spec.ts covers the seeded store.
     await expect(page.getByTestId("sample-verdict")).toHaveCount(0);
     await expect(page.getByTestId("privacy-footer")).toHaveText("Nothing is saved to an account. To save Qloo calls, the comp titles you enter are cached for 30 days. Daily limits count visits by a hashed IP, which is kept for 48 hours.");
@@ -69,10 +68,8 @@ test.describe.serial("Pennywell flow", () => {
       expect(box.y + box.height).toBeLessThanOrEqual(800);
     }
     await expect(page.locator("#comps")).toBeVisible(); // the paste box stays available
-    // The whole landing, competitor line and price included, fits in 1280x800.
-    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(800);
-    const foot = (await page.locator("footer").boundingBox())!;
-    expect(foot.y + foot.height).toBeLessThanOrEqual(800);
+    // UX audit WP-3: how it works and the sample note now sit above the fold; the about block and the box follow below.
+    await expect(page.getByTestId("how")).toBeInViewport({ ratio: 1 });
     await expect(page.getByText("$599 for 10 films from FilmProposals", { exact: false })).toBeVisible();
     await expect(page.getByText("How it differs: Other tools help you find or build comps.", { exact: false })).toBeVisible();
     await page.screenshot({ path: path.join(QA, "design2-landing.png") });
@@ -162,7 +159,7 @@ test.describe.serial("Pennywell flow", () => {
     await row(page, out).getByTestId("comp-toggle").click();
     await expect(detail(page, out)).toBeHidden();
     await expect(page.locator('[data-testid="flag"]', { hasText: "Wikipedia" })).toHaveCount(0);
-    await expect(page.getByTestId("legend")).toHaveText("Fit score: how well this comp fits with the rest of your list, scored by Qloo the same way every time. Higher fits better. Open a comp for its Why lines and audience bars.");
+    await expect(page.getByTestId("legend")).toHaveText(`${TABLE.legend} ${TABLE.legendScreen}`);
     await expect(page.getByTestId("calls")).toHaveText(/^Qloo results cached at [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M CT\. Run again calls Qloo live\.$/);
     await expect(row(page, out).locator(".flag", { hasText: "Audience outlier" })).toBeVisible();
     await expect(page.locator(".flag", { hasText: "Audience outlier" })).toHaveCount(1);
@@ -290,9 +287,9 @@ test.describe.serial("Pennywell flow", () => {
   test("d. export Markdown and CSV", async () => {
     const rows = await scores(page);
     await openExport(page);
-    for (const [label, file] of [["Export Markdown", "comp-check.md"], ["Export CSV", "comp-check.csv"]] as const) {
+    for (const [label, file] of [["Download Markdown (.md)", "comp-check.md"], ["Download CSV (.csv)", "comp-check.csv"]] as const) {
       const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
-      expect(dl.suggestedFilename()).toBe(file);
+      expect(dl.suggestedFilename()).toMatch(new RegExp(`^film-comp-check-[a-z]+-\\d{4}-\\d{2}-\\d{2}\\.${file.split(".")[1]}$`)); // UX audit WP-13
       const dest = path.join(QA, file);
       await dl.saveAs(dest);
       const body = await fs.readFile(dest, "utf8");
@@ -363,7 +360,7 @@ test.describe.serial("Pennywell flow", () => {
     await page.locator("#comps").fill("Alpha | 2001\nBravo | 2002\nCharlie | 2003\nDelta | 2004");
     await page.getByRole("button", { name: "Check comps" }).click();
     await expect(page.getByTestId("comp-row")).toHaveCount(4);
-    for (const label of ["Matched", "Unmatched", "Unscored", "Set aside", "Consider cutting", "Audience outlier", "Thin record"]) {
+    for (const label of ["Matched", "Unmatched", "Unscored", "Set aside", "Consider cutting", "Audience outlier", "Thin Qloo record"]) {
       await expect(page.locator('[data-testid="badge"], [data-testid="flag"]').filter({ hasText: label }).first()).toBeVisible();
     }
     await assertLabeled(page);
@@ -384,7 +381,7 @@ test.describe.serial("Pennywell flow", () => {
     await page.route(/\/api\/check/, async (r) => { await held; await r.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "Qloo did not answer in time." }) }); });
     await page.getByRole("button", { name: "Try the Pennywell sample" }).click();
     await expect(page.getByTestId("loading-state")).toBeVisible();
-    await expect(page.getByTestId("loading-state")).toContainText("Checking 6 comps with Qloo.");
+    await expect(page.getByTestId("loading-state")).toContainText("No new Qloo calls."); // a recorded sample loads (UX audit WP-6)
     await expect(page.getByTestId("skeleton-row")).toHaveCount(6);
     await expect(page.getByTestId("map-placeholder")).toBeVisible();
     // Mid-run (before any step): verdict area, all six rows and the one-line live status fit at 1280x800.
@@ -468,7 +465,7 @@ test.describe.serial("Pennywell flow", () => {
     await assertNoScroll(page);
     await page.screenshot({ path: path.join(QA, "design2-incomplete.png") });
     await openExport(page);
-    for (const label of ["Export Markdown", "Export CSV"]) {
+    for (const label of ["Download Markdown (.md)", "Download CSV (.csv)"]) {
       const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
       const body = await fs.readFile((await dl.path())!, "utf8");
       expect(body).toMatch(label.includes("CSV") ? /"Winchester \(2018\)[^\n]*"unavailable","unavailable","unavailable"/ : /\| Winchester \| unavailable \| unavailable \|/);

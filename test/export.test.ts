@@ -38,7 +38,10 @@ describe("recorded stamp in export", async () => {
   it("recorded: the recorded-run line, in Markdown and CSV", () => {
     const r = { ...base, provider: "stub", providerLabel: "stub", recorded: { deck: "Testdeck", at: "2026-10-09T17:00:00.000Z" } };
     expect(recordedStamp(r)).toBe("Qloo results recorded Oct 9, 2026 · Fixed rules chose 1 of 3 steps live");
-    expect(toMarkdown(r)).toContain("Qloo results recorded Oct 9, 2026 · Fixed rules chose 1 of 3 steps live.");
+    // Markdown has one recorded-date line (the sample label's), so its stamp drops the date (Oct 30); CSV keeps it.
+    expect(toMarkdown(r)).toContain("Sample run, recorded Oct 9, 2026.");
+    expect(toMarkdown(r)).toContain("Qloo results recorded · Fixed rules chose 1 of 3 steps live.");
+    expect(toMarkdown(r).match(/recorded[^.\n]*Oct 9, 2026/g)).toHaveLength(1);
     expect(toCsv(r)).toContain("Qloo results recorded Oct 9, 2026 · Fixed rules chose 1 of 3 steps live.");
   });
   it("replay backup: its own line", () => {
@@ -49,7 +52,9 @@ describe("recorded stamp in export", async () => {
   it("fewer than 3 matched: the stamp names no steps (screen, Markdown, CSV)", () => {
     const r = { ...base, comps: base.comps.map((c, i) => (i >= 1 ? { ...c, match: { ...c.match, badge: "Unmatched" } } : c)), provider: "stub", providerLabel: "stub", recorded: { deck: "Testdeck", at: "2026-10-09T17:00:00.000Z" } } as typeof base;
     expect(recordedStamp(r, { steps: false })).toBe("Qloo results recorded Oct 9, 2026");
-    for (const out of [toMarkdown(r), toCsv(r)]) { expect(out).toContain("Qloo results recorded Oct 9, 2026"); expect(out).not.toMatch(/chose \d+ of \d+ steps/); }
+    expect(toCsv(r)).toContain("Qloo results recorded Oct 9, 2026");
+    expect(toMarkdown(r)).toContain("Sample run, recorded Oct 9, 2026.");
+    for (const out of [toMarkdown(r), toCsv(r)]) expect(out).not.toMatch(/chose \d+ of \d+ steps/);
   });
   it("sample label: two dates when the replay is on a later day (screen line, Markdown, CSV)", async () => {
     const { sampleLabel } = await import("@/lib/stamp");

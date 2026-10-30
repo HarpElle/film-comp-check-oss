@@ -55,7 +55,7 @@ test.describe("Run live on Qloo (mocked Qloo, in-memory store)", () => {
       await expect(page.getByTestId("sample-quiet-line")).toHaveCount(0);
       await expect(page.locator("body")).not.toContainText("Run live on Qloo");
       await expect(page.getByTestId("replay-again")).toHaveText("Run again");
-      await expect(line.getByRole("button")).toHaveCount(1);
+      await expect(line.getByRole("button", { name: /^Run/ })).toHaveCount(1); // the stamp's step count is a link too (UX audit WP-6)
       // The server refuses a live sample run too, without a Qloo call.
       const r = await page.request.post(`${OFF}/api/check`, { data: { comps: st.samples.find((s: { id: string }) => s.id === (name === "Pennywell" ? "pennywell" : "dreamhackers")).comps, live: "sample" } });
       expect((await r.json()).error).toBe("A live run of the sample isn't available right now. The recorded run still works.");
@@ -142,7 +142,8 @@ test.describe("Run live on Qloo (mocked Qloo, in-memory store)", () => {
     const before = await mockCalls(page);
     await page.getByTestId("run-live-qloo").click();
     await waitIdle(page);
-    await expect(page.getByTestId("error-detail")).toHaveText(SAMPLE_VISITOR_LIMIT);
+    await expect(page.getByTestId("error-detail")).toHaveCount(0); // the limit card's own body says it (UX audit WP-11, 7.5)
+    await expect(page.getByTestId("error-headline")).toHaveText("Today's live checks are used up");
     await expect(page.getByTestId("error-sample")).toBeVisible();
     await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
     expect(await mockCalls(page)).toBe(before);

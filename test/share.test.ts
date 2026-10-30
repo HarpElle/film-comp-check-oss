@@ -23,7 +23,7 @@ describe("share links (deck in the URL, never expire)", () => {
     expect(readShare("?c=")).toEqual({ comps: [], error: "empty" });
     expect(readShare("?c=+&c=")!.error).toBeTruthy();
     const { BROKEN_LINK } = await import("@/lib/error-state");
-    expect(`${BROKEN_LINK.headline} ${BROKEN_LINK.body}`).toBe("This link is broken or out of date. Run the check again to get a fresh one.");
-    expect(BROKEN_LINK.actions).toEqual(["new-check"]);
+    expect(`${BROKEN_LINK.headline} ${BROKEN_LINK.body}`).toBe("This link's comp list can't be read. Type or paste your comps below, or try a sample.");
+    expect(BROKEN_LINK.actions).toEqual(["edit"]);
   });
 });

@@ -55,13 +55,18 @@ export async function assertMap(page: Page, expectOutside?: string[]) {
   expect(Math.abs((box.width - 1.5) - threshold * (plot.width - 1))).toBeLessThanOrEqual(1);
   const bx = Number(await boxEl.getAttribute("x")), by = Number(await boxEl.getAttribute("y")), bw = Number(await boxEl.getAttribute("width")), bh = Number(await boxEl.getAttribute("height"));
   const outside: string[] = [];
+  // UX audit WP-8: more than 4 flagged points get no labels at rest (hover or focus labels one).
+  const restLabels = (await page.locator('[data-testid="map-point"]:not([data-flag="none"])').count()) <= 4;
   for (const p of await page.getByTestId("map-point").all()) {
     const t = (await p.getAttribute("data-title"))!;
     const cx = Number(await p.getAttribute("data-cx")), cy = Number(await p.getAttribute("data-cy"));
     if (cx < bx || cx > bx + bw || cy < by || cy > by + bh) outside.push(t);
     const flag = await p.getAttribute("data-flag");
     // Design spec, map: labels for flagged comps only (name, then the flag word); unflagged comps are named by <title>.
-    if (flag !== "none") {
+    if (flag !== "none" && !restLabels) {
+      await expect(p.getByTestId("map-label")).toHaveCount(0);
+      await expect(p.locator("title")).toContainText(t);
+    } else if (flag !== "none") {
       await expect(p.getByTestId("map-label")).toHaveText(t);
       await expect(p.getByTestId("map-flag")).toHaveText(flag === "outlier" ? "Audience outlier" : "Audience split");
     } else {
@@ -80,14 +85,16 @@ export async function assertMap(page: Page, expectOutside?: string[]) {
 }
 
 /** Design spec, frame: at 1280x800, scrollY 0, the verdict, both status lines, the whole map, the table header and every row are fully on screen. */
-export async function assertNoScroll(page: Page) {
+export async function assertNoScroll(page: Page, rows = 5) {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page.getByTestId("verdict")).toBeInViewport({ ratio: 1 });
   await expect(page.getByTestId("status-lines")).toBeInViewport({ ratio: 1 });
   await expect(page.getByTestId("deck-map")).toBeInViewport({ ratio: 1 });
   await expect(page.locator("table.results thead")).toBeInViewport({ ratio: 1 });
-  for (const r of await page.getByTestId("comp-row").all()) {
+  // UX audit D2: flagged rows carry their reason inline, so the first `rows` rows (5 on Pennywell, not every row) sit
+  // above the fold.
+  for (const r of (await page.getByTestId("comp-row").all()).slice(0, rows)) {
     const b = (await r.boundingBox())!;
     expect(b.y + b.height).toBeLessThanOrEqual(800);
   }

@@ -14,12 +14,12 @@ export const MAX_COMPS = 10;
 export const LIMIT_RESET = "midnight";
 
 export type ErrorAction = "retry" | "sample" | "edit" | "add" | "agent-again" | "new-check";
-export type ErrorKind = "qloo" | "claude" | "too-many" | "too-few" | "unreadable" | "limit" | "remove" | "other" | "broken-link" | "unmatched" | "several";
+export type ErrorKind = "offline" | "qloo" | "claude" | "too-many" | "too-few" | "unreadable" | "limit" | "remove" | "other" | "broken-link" | "unmatched" | "several";
 export interface ErrorView { kind: ErrorKind; headline: string; body: string; actions: ErrorAction[] }
 
 const QLOO: ErrorView = {
   kind: "qloo", headline: "Qloo isn't answering right now",
-  body: "We couldn't get audience data for your comps, so there's no verdict yet. Your list is still here. Try again in a minute, or open a sample deck to see how the check works.",
+  body: "We couldn't get audience data for your comps, so there's no verdict yet. Your comps are still here. Try again in a minute, or open a sample deck to see how the check works.",
   actions: ["retry", "sample"],
 };
 export const AGENT_DOWN: ErrorView = {
@@ -33,10 +33,18 @@ const limit = (reset: boolean): ErrorView => ({
   body: reset ? `${LIMIT_BODY} Live checks reset at ${LIMIT_RESET} Central time.` : LIMIT_BODY, actions: ["sample"],
 });
 // The copy's item 10 names a contact address; the app shows none, by design.
-const OTHER: ErrorView = { kind: "other", headline: "Something went wrong on our side", body: "Your list wasn't lost. Try again. If it keeps happening, try again later.", actions: ["retry", "sample"] };
+const OTHER: ErrorView = { kind: "other", headline: "Something went wrong on our side", body: "Your comps weren't lost. Try again. If it keeps happening, try again later.", actions: ["retry", "sample"] };
 
 /** A share link whose deck can't be read or checked (share links never expire, so this is a damaged or hand-edited URL). */
-export const BROKEN_LINK: ErrorView = { kind: "broken-link", headline: "This link is broken or out of date.", body: "Run the check again to get a fresh one.", actions: ["new-check"] };
+export const BROKEN_LINK: ErrorView = { kind: "broken-link", headline: "This link's comp list can't be read.", body: "Type or paste your comps below, or try a sample.", actions: ["edit"] };
+
+/** The browser is offline (UX audit WP-11, 9.1): the run never reached the server. `check()` reports it with this message. */
+export const OFFLINE_MESSAGE = "offline";
+const OFFLINE: ErrorView = { kind: "offline", headline: "You're offline", body: "The check didn't run, and your comps are still here. Try again when you're back online.", actions: ["retry"] };
+/** Stop with no result yet (UX audit WP-11, 9.4). */
+export const STOPPED_LINE = "Check stopped. Nothing was scored.";
+/** Above the box while it holds a shared custom deck (UX audit WP-11, 9.3). */
+export const sharedDeckLine = (n: number) => `Shared deck: ${n} comps. Check comps runs them live on Qloo.`;
 
 /** Error copy item 3: a comp Qloo has no record for. */
 export const unmatched = (input: string): ErrorView => ({
@@ -46,20 +54,24 @@ export const unmatched = (input: string): ErrorView => ({
 /** Error copy item 4: a comp whose title fits records from different years; the panel lists them to pick from. */
 export const several = (input: string): ErrorView => ({ kind: "several", headline: `"${input}" matches more than one title`, body: "Pick the one you meant.", actions: [] });
 
+export const COMMA_HINT = "Put each comp on its own line. Titles can contain commas, so commas don't split them.";
+
 /** A deck that can't be checked yet, from the box's text; null when it can run. */
 export function deckError(text: string): ErrorView | null {
   const comps = parseCompLines(text);
   const n = comps.length;
   // The copy's "or separate titles with commas" is left out: titles can contain commas, so lines are the only separator.
-  if (n === 0) return { kind: "unreadable", headline: "We couldn't read that list", body: "Put one title per line. Adding the year helps.", actions: ["retry"] };
-  if (n < MIN_COMPS) return { kind: "too-few", headline: `Add at least ${MIN_COMPS} comps`, body: "The check compares each comp against the rest, so it needs a few to compare.", actions: ["add"] };
+  if (n === 0) return { kind: "unreadable", headline: "We couldn't read that list", body: "Put one title per line. Adding the year helps.", actions: ["edit"] };
+  // UX audit WP-12 (10.2): commas don't split titles, so a comma list reads as one comp; say so.
+  if (n < MIN_COMPS) return { kind: "too-few", headline: `Add at least ${MIN_COMPS} comps`, body: text.includes(",") ? COMMA_HINT : "The check compares each comp against the rest, so it needs a few to compare.", actions: ["add"] };
   if (n > MAX_COMPS) return { kind: "too-many", headline: `Up to ${MAX_COMPS} comps per check`, body: `You entered ${n}. Remove ${n - MAX_COMPS} and run it again. Five to eight comps usually gives the clearest read.`, actions: ["edit"] };
-  if (comps.some((c) => c.title.length > 200)) return { kind: "unreadable", headline: "We couldn't read that list", body: "A title is over 200 characters. Shorten it and try again.", actions: ["retry"] };
+  if (comps.some((c) => c.title.length > 200)) return { kind: "unreadable", headline: "We couldn't read that list", body: "A title is over 200 characters. Shorten it and try again.", actions: ["edit"] };
   return null;
 }
 
 /** A run that ended without a result. `removing` is the title being re-scored away when the run was a Remove. */
 export function runError(message: string, removing?: string): ErrorView {
+  if (message === OFFLINE_MESSAGE) return OFFLINE;
   if (removing) return { kind: "remove", headline: `Couldn't re-score without ${removing}`, body: "Your previous results are unchanged.", actions: ["retry"] };
   if (message === VISITOR_LIMIT || message === SAMPLE_VISITOR_LIMIT) return limit(true);
   if (message === QUOTA_USED_UP || message === SAMPLE_LIVE_OFF) return limit(false);

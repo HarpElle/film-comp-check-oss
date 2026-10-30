@@ -17,6 +17,10 @@ describe("error states (copy picked from what failed)", () => {
     expect(deckError(lines(MIN_COMPS))).toBeNull();
     expect(deckError(lines(MAX_COMPS))).toBeNull();
   });
+  it("a comma list that reads as fewer than 3 comps gets the comma hint (UX audit WP-12)", () => {
+    expect(deckError("A, B, C")!.body).toBe("Put each comp on its own line. Titles can contain commas, so commas don't split them.");
+    expect(deckError("A\nB")!.body).toBe("The check compares each comp against the rest, so it needs a few to compare.");
+  });
   it("run errors map to Qloo down, the daily limit (midnight Central time), Remove failed, or something else", () => {
     expect(runError(CANT_REACH).kind).toBe("qloo");
     expect(runError("Qloo did not answer in time.").kind).toBe("qloo");
