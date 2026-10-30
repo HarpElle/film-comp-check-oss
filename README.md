@@ -17,7 +17,7 @@ It checks comps. It does not predict box office, revenue or audience size.
 ## Try it in 3 steps
 
 1. **Open a sample deck.** On https://filmcompcheck.com, click "Try the Pennywell sample" (or the Dream Hackers sample when it is shown). Samples replay recorded Qloo results, so they make no new Qloo calls. The page says "No new Qloo calls." and shows the recording date.
-2. **Read the verdict and Agent steps.** The verdict names the lowest-fit comp and any audience outlier, labeled "Qloo's estimate". Under "Agent steps", each step is tagged "Always runs" (fixed code) or "Model chose" (a lookup Claude picked), with the Qloo value it was based on.
+2. **Read the verdict and Agent steps.** The verdict names the lowest-fit comp and any audience outlier, labeled "Qloo's estimate". Under "Agent steps", each step is tagged "Always runs" (fixed code) or "Claude chose" (a lookup Claude picked), with the Qloo value it was based on.
 3. **Remove a comp, or enter your own.** Click the x on a comp row to remove it and see the rest re-scored. On a sample this uses the recording. Then click "Edit comps", type 3 to 10 comps (one per line, year and director optional, for example `Get Out | 2017 | Jordan Peele`) and click "Check comps". Your own deck runs live on Qloo. Each visitor gets 5 live checks a day, and the limit resets at midnight Central time.
 
 Export: the Export menu prints a comp-check sheet or downloads Markdown or CSV.
