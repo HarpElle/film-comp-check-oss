@@ -59,6 +59,7 @@ button:disabled:not(.btn) { opacity: 0.5; }
 /* UX audit WP-3: the purpose is the h1 (the name is in the header and <title>). */
 .hero h1.purpose { font: var(--type-display-condensed); font-size: 40px; max-width: 24ch; margin: var(--s1) 0 var(--s2); }
 .hero .intro { margin: 0 0 var(--s3); color: var(--fg-2); }
+.hero .intro.comps-def { margin-bottom: var(--s2); }
 .how { list-style: none; margin: 0 0 var(--s4); padding: 0; display: grid; gap: var(--space-2); font: var(--type-body); }
 .how li { display: flex; gap: var(--space-3); align-items: baseline; }
 .how-n { font-family: var(--font-mono); color: var(--fg-2); flex: none; }

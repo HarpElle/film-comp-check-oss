@@ -24,6 +24,7 @@ export function Landing({ status, busy, pausedToday, onSample }: { status: PageS
         <div>
           {/* Landing copy, verbatim (lib/copy.ts). The name is in the header and <title>; the h1 says what it does. */}
           <h1 className="purpose" data-testid="purpose">{COPY.purpose}</h1>
+          <p className="intro comps-def" data-testid="comps-def">{COPY.compsDef}</p>
           <p className="intro" data-testid="intro">{COPY.sub}</p>
           <ol className="how" aria-label="How it works" data-testid="how">
             {LANDING.how.map((l, i) => <li key={i}><span className="how-n" aria-hidden="true">{i + 1}</span><span>{l}</span></li>)}

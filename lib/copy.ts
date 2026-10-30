@@ -4,6 +4,7 @@ export const COPY = {
   title: "Film Comp Check",
   purpose: "Check whether each film on your comp slide belongs there.",
   sub: "For producers checking a comp slide before it goes to investors.",
+  compsDef: "Comps are past films your pitch deck names as like yours, to show investors there is an audience for it.",
   button: "Try the Pennywell sample",
   /** Who-pays block, locked 2026-10-27, verbatim. */
   whoPays: "Film funds ask for comps. Telefilm Canada wants the performance of comparable films in production financing applications, and the New Zealand Film Commission wants comparative titles with their box office. Filmmakers already pay for comps built on box office, such as $599 for 10 films from FilmProposals or $299 for a FILM.FUND Comparable Film Report. Those tools measure money. Film Comp Check uses Qloo taste data to test whether a deck's comps fit together and draw a similar audience, and flags any comp that doesn't.",
